@@ -4,7 +4,7 @@
 
 - `main` is a protected integration branch. Do not commit, merge, force-push, or push directly to it.
 - Create a short-lived branch for every change and open a pull request targeting `main`.
-- Do not bypass Git hooks with `--no-verify`. The local hooks block commits and pushes to `main`; GitHub branch protection must also require a pull request and the `CI / Quality` status check.
+- Do not bypass Git hooks with `--no-verify`. The local hooks block commits and pushes to `main`; GitHub branch protection must also require a pull request and the `Quality` status check.
 - Use Conventional Commits, for example `feat(editor): add table controls` or `fix(clipboard): preserve plain text`.
 
 ## Tooling
