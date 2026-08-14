@@ -1,0 +1,21 @@
+{
+  "name": "@kaelen/editor-react",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@kaelen/editor-api": "workspace:*",
+    "@kaelen/editor-shared-types": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "devDependencies": {
+    "react": "^19.2.0"
+  }
+}

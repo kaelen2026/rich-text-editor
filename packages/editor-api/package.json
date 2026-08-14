@@ -1,0 +1,16 @@
+{
+  "name": "@kaelen/editor-api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@kaelen/editor-runtime": "workspace:*",
+    "@kaelen/editor-schema": "workspace:*",
+    "@kaelen/editor-shared-types": "workspace:*"
+  }
+}

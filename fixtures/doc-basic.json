@@ -1,0 +1,43 @@
+{
+  "envelope": 1,
+  "schemaVersion": 1,
+  "plugins": {},
+  "doc": {
+    "type": "doc",
+    "content": [
+      {
+        "type": "paragraph",
+        "content": [
+          {
+            "type": "text",
+            "marks": [
+              {
+                "type": "strong"
+              }
+            ],
+            "text": "加粗文本"
+          },
+          {
+            "type": "text",
+            "text": "普通文本"
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": [
+          {
+            "type": "text",
+            "marks": [
+              {
+                "type": "em"
+              }
+            ],
+            "text": "斜体段落"
+          }
+        ]
+      }
+    ]
+  },
+  "annotations": []
+}
