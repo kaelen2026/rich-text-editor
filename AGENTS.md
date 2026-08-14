@@ -13,6 +13,13 @@
 - Before opening a PR, run `pnpm check`. Run relevant tests whenever they exist.
 - Biome owns linting and formatting. Use `pnpm check:fix` for safe automatic fixes.
 
+## Test-driven development
+
+- Develop behaviour changes using the red-green-refactor cycle: first add or update a test that fails for the intended behaviour, then make the smallest change that passes it, and only then refactor.
+- Every bug fix must include a regression test that demonstrates the original failure.
+- Test public behaviour and edge cases rather than implementation details. Keep tests deterministic and independent.
+- If automated coverage is not practical, explain the reason and the manual validation performed in the PR.
+
 ## Change scope
 
 - Keep changes focused and avoid unrelated refactors.
