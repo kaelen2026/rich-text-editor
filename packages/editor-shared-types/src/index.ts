@@ -51,7 +51,7 @@ export interface LoadResult {
 }
 
 /** 命令失败原因可判别，便于线上定位（方案 §8.1）。 */
-export type CommandFailureReason = "disabled" | "destroyed";
+export type CommandFailureReason = "disabled" | "destroyed" | "invalid";
 
 export interface CommandResult {
   ok: boolean;
@@ -118,6 +118,11 @@ export interface CoreNodeView {
   attrs: Record<string, unknown>;
 }
 
+/** 标记渲染函数只可读取自身的持久化属性。 */
+export interface CoreMarkView {
+  attrs: Record<string, unknown>;
+}
+
 export interface CoreNodeSpec {
   content?: string;
   group?: string;
@@ -130,6 +135,7 @@ export interface CoreNodeSpec {
 }
 
 export interface CoreMarkSpec {
+  attrs?: Record<string, CoreAttrSpec>;
   parseDOM?: CoreParseRule[];
-  toDOM?: () => DomOutputSpec;
+  toDOM?: (mark: CoreMarkView) => DomOutputSpec;
 }

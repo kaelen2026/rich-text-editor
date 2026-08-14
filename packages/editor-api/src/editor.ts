@@ -1,4 +1,4 @@
-import { createRuntime } from "@kaelen/editor-runtime";
+import { createRuntime, type RuntimeOptions } from "@kaelen/editor-runtime";
 import type {
   CommandQuery,
   CommandResult,
@@ -20,7 +20,7 @@ export interface RichEditor {
   loadDocument(envelope: EditorEnvelope): LoadResult;
   getDocument(): EditorEnvelope;
 
-  execute(command: string): CommandResult;
+  execute(command: string, input?: unknown): CommandResult;
   /** 工具栏所需状态：能否执行、当前是否生效。 */
   queryCommand(command: string): CommandQuery;
 
@@ -44,13 +44,15 @@ export interface RichEditor {
   focus(): void;
 }
 
-export function createEditor(): RichEditor {
-  const runtime = createRuntime();
+export type EditorOptions = RuntimeOptions;
+
+export function createEditor(options: EditorOptions = {}): RichEditor {
+  const runtime = createRuntime(options);
 
   return {
     loadDocument: (envelope) => runtime.loadDocument(envelope),
     getDocument: () => runtime.getDocument(),
-    execute: (command) => runtime.execute(command),
+    execute: (command, input) => runtime.execute(command, input),
     queryCommand: (command) => runtime.queryCommand(command),
     getSnapshot: () => runtime.getSnapshot(),
     subscribe: (event, listener) => runtime.subscribe(event, listener),

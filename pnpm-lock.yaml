@@ -53,6 +53,9 @@ importers:
       '@kaelen/editor-api':
         specifier: workspace:*
         version: link:../../packages/editor-api
+      '@kaelen/editor-plugin-link':
+        specifier: workspace:*
+        version: link:../../packages/editor-plugin-link
       '@kaelen/editor-react':
         specifier: workspace:*
         version: link:../../packages/editor-react
@@ -87,6 +90,19 @@ importers:
       '@kaelen/editor-shared-types':
         specifier: workspace:*
         version: link:../editor-shared-types
+
+  packages/editor-plugin-link:
+    dependencies:
+      '@kaelen/editor-runtime':
+        specifier: workspace:*
+        version: link:../editor-runtime
+      prosemirror-commands:
+        specifier: ^1.7.1
+        version: 1.7.2
+    devDependencies:
+      '@kaelen/editor-api':
+        specifier: workspace:*
+        version: link:../editor-api
 
   packages/editor-pm-adapter:
     dependencies:

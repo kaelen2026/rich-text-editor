@@ -136,4 +136,32 @@ export class EditorSession {
   markType(markName: string): MarkType | undefined {
     return this.schema.marks[markName];
   }
+
+  /** 返回光标或选区起点处的标记属性，供需要读取持久化属性的命令使用。 */
+  markAttrsAtSelection(markName: string): Record<string, unknown> | undefined {
+    const markType = this.markType(markName);
+    if (!markType) {
+      return undefined;
+    }
+    const { selection, doc, storedMarks } = this.state;
+    const cursorMark = markType.isInSet(storedMarks ?? selection.$from.marks());
+    if (cursorMark) {
+      return cursorMark.attrs;
+    }
+    for (const range of selection.ranges) {
+      let selectedMark: Record<string, unknown> | undefined;
+      doc.nodesBetween(range.$from.pos, range.$to.pos, (node) => {
+        const mark = markType.isInSet(node.marks);
+        if (mark) {
+          selectedMark = mark.attrs;
+          return false;
+        }
+        return true;
+      });
+      if (selectedMark) {
+        return selectedMark;
+      }
+    }
+    return undefined;
+  }
 }

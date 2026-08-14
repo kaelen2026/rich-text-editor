@@ -8,11 +8,12 @@ import type {
   EditorSnapshot,
   LoadResult,
 } from "@kaelen/editor-shared-types";
+import { collectPluginCapabilities, type EditorPlugin } from "./plugins";
 
 export interface Runtime {
   loadDocument(envelope: EditorEnvelope): LoadResult;
   getDocument(): EditorEnvelope;
-  execute(command: string): CommandResult;
+  execute(command: string, input?: unknown): CommandResult;
   queryCommand(command: string): CommandQuery;
   getSnapshot(): EditorSnapshot;
   subscribe(event: EditorEventName, listener: () => void): () => void;
@@ -30,10 +31,15 @@ export interface Runtime {
 /** 信封中除文档体以外的部分：装载时记住，取回时原样带出。 */
 type EnvelopeMeta = Omit<EditorEnvelope, "doc">;
 
-export function createRuntime(): Runtime {
-  const schema = buildSchema();
+export interface RuntimeOptions {
+  plugins?: EditorPlugin[];
+}
+
+export function createRuntime(options: RuntimeOptions = {}): Runtime {
+  const capabilities = collectPluginCapabilities(options.plugins ?? []);
+  const schema = buildSchema({ nodes: capabilities.nodes, marks: capabilities.marks });
   const initial = createEmptyEnvelope();
-  const commands = new Map(Object.entries(coreCommands));
+  const commands = new Map([...Object.entries(coreCommands), ...capabilities.commands]);
 
   let meta = toMeta(initial);
   let revision = 0;
@@ -90,7 +96,7 @@ export function createRuntime(): Runtime {
       return { ...meta, doc: session.docJSON };
     },
 
-    execute(command: string): CommandResult {
+    execute(command: string, input?: unknown): CommandResult {
       if (destroyed) {
         return { ok: false, reason: "destroyed" };
       }
@@ -98,7 +104,7 @@ export function createRuntime(): Runtime {
       if (!spec) {
         return { ok: false, reason: "disabled", detail: `未注册的命令：${command}` };
       }
-      return spec.run(session, true) ? { ok: true } : { ok: false, reason: "disabled" };
+      return spec.run(session, true, input);
     },
 
     queryCommand(command: string): CommandQuery {
@@ -106,7 +112,10 @@ export function createRuntime(): Runtime {
       if (destroyed || !spec) {
         return { enabled: false, active: false };
       }
-      return { enabled: spec.run(session, false), active: spec.active(session) };
+      return {
+        enabled: spec.enabled?.(session) ?? spec.run(session, false).ok,
+        active: spec.active(session),
+      };
     },
 
     getSnapshot(): EditorSnapshot {
