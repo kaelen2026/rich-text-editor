@@ -1,0 +1,69 @@
+{
+  "envelope": 1,
+  "schemaVersion": 1,
+  "plugins": {
+    "image": 1,
+    "table": 2
+  },
+  "doc": {
+    "type": "doc",
+    "content": [
+      {
+        "type": "paragraph",
+        "content": [
+          {
+            "type": "text",
+            "text": "前面的段落"
+          }
+        ]
+      },
+      {
+        "type": "co_table",
+        "attrs": {
+          "cols": 2
+        },
+        "content": [
+          {
+            "type": "co_table_row",
+            "content": [
+              {
+                "type": "co_table_cell",
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "单元格内容"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": [
+          {
+            "type": "text",
+            "text": "后面的"
+          },
+          {
+            "type": "co_mention",
+            "attrs": {
+              "userId": "u_1"
+            }
+          },
+          {
+            "type": "text",
+            "text": "段落"
+          }
+        ]
+      }
+    ]
+  },
+  "annotations": []
+}

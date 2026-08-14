@@ -43,12 +43,16 @@ export function createRuntime(): Runtime {
   let snapshot: EditorSnapshot | null = null;
   const listeners = new Map<EditorEventName, Set<() => void>>();
 
+  function emit(event: EditorEventName): void {
+    for (const listener of listeners.get(event) ?? []) {
+      listener();
+    }
+  }
+
   function invalidate(): void {
     stateRevision += 1;
     snapshot = null;
-    for (const listener of listeners.get("change") ?? []) {
-      listener();
-    }
+    emit("change");
   }
 
   const session = new EditorSession(schema, initial.doc, (docChanged) => {
@@ -63,19 +67,23 @@ export function createRuntime(): Runtime {
     loadDocument(envelope: EditorEnvelope): LoadResult {
       const errors = validateEnvelope(envelope);
       if (errors.length > 0) {
-        return { ok: false, errors };
+        return { ok: false, degraded: false, unknownNodes: [], errors };
       }
+      let unknownNodes: string[];
       try {
-        session.replaceDoc(envelope.doc);
+        unknownNodes = session.replaceDoc(envelope.doc);
       } catch (error) {
-        return { ok: false, errors: [describe(error)] };
+        return { ok: false, degraded: false, unknownNodes: [], errors: [describe(error)] };
       }
       meta = toMeta(envelope);
       // 装载是初始化，不是用户编辑：修订号与脏标记归零。
       revision = 0;
       dirty = false;
       invalidate();
-      return { ok: true };
+      if (unknownNodes.length > 0) {
+        emit("documentDegraded");
+      }
+      return { ok: true, degraded: unknownNodes.length > 0, unknownNodes };
     },
 
     getDocument(): EditorEnvelope {

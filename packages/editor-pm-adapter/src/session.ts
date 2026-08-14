@@ -3,6 +3,7 @@ import { type MarkType, Node as ProseMirrorNode, type Schema } from "prosemirror
 import { type Command, EditorState, type Transaction } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 import { editorPlugins } from "./plugins";
+import { restoreDoc, sanitizeDoc } from "./unknown";
 
 /** 状态变化通知。`docChanged` 区分内容变更与仅选区变更。 */
 export type SessionChangeListener = (docChanged: boolean) => void;
@@ -22,13 +23,13 @@ export class EditorSession {
   ) {
     this.state = EditorState.create({
       schema,
-      doc: ProseMirrorNode.fromJSON(schema, doc),
+      doc: ProseMirrorNode.fromJSON(schema, sanitizeDoc(schema, doc).doc),
       plugins: editorPlugins(schema),
     });
   }
 
   get docJSON(): NodeJSON {
-    return this.state.doc.toJSON() as NodeJSON;
+    return restoreDoc(this.state.doc.toJSON() as NodeJSON);
   }
 
   get mounted(): boolean {
@@ -63,13 +64,15 @@ export class EditorSession {
    * 装载新文档。重建状态因此历史被清空——"装载不产生可撤销记录"由此成立，
    * 用户无法撤销到装载之前（方案 §8.1）。
    */
-  replaceDoc(doc: NodeJSON): void {
+  replaceDoc(doc: NodeJSON): string[] {
+    const { doc: sanitized, unknownNodes } = sanitizeDoc(this.schema, doc);
     this.state = EditorState.create({
       schema: this.schema,
-      doc: ProseMirrorNode.fromJSON(this.schema, doc),
+      doc: ProseMirrorNode.fromJSON(this.schema, sanitized),
       plugins: editorPlugins(this.schema),
     });
     this.view?.updateState(this.state);
+    return unknownNodes;
   }
 
   /**
