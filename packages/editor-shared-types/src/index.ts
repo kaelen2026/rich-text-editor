@@ -43,6 +43,10 @@ export interface EditorEnvelope {
 
 export interface LoadResult {
   ok: boolean;
+  /** 是否有内容被降级为只读兜底节点。宿主据此提示用户。 */
+  degraded: boolean;
+  /** 被兜底的节点名，按文档顺序去重。 */
+  unknownNodes: string[];
   errors?: string[];
 }
 
@@ -65,7 +69,7 @@ export interface CommandQuery {
  * 事件名。只列出当前真实会派发的事件；后续切片按需增补
  * （`patch`、`pluginError`、`documentDegraded` 等见方案 §9.4）。
  */
-export type EditorEventName = "change";
+export type EditorEventName = "change" | "documentDegraded";
 
 /**
  * 引用稳定的状态快照：状态未变时必须返回同一个对象。
@@ -89,10 +93,29 @@ export interface EditorSnapshot {
 export type DomOutputSpec = string | readonly [string, ...DomOutputSpecChild[]];
 export type DomOutputSpecChild = DomOutputSpec | Record<string, string> | 0;
 
-export interface CoreParseRule {
-  tag?: string;
-  style?: string;
+export interface CoreTagParseRule {
+  tag: string;
   priority?: number;
+}
+
+export interface CoreStyleParseRule {
+  style: string;
+  priority?: number;
+}
+
+/** 节点只能按标签解析；样式解析只对标记有意义。 */
+export type CoreParseRule = CoreTagParseRule | CoreStyleParseRule;
+
+export interface CoreAttrSpec {
+  default?: unknown;
+}
+
+/**
+ * `toDOM` 能看到的节点视图。刻意只有 `attrs`：渲染函数拿不到 ProseMirror 节点，
+ * 也就无法访问文档内部或 DOM，服务端才能复用同一份渲染逻辑（方案 §7.1、§12.1）。
+ */
+export interface CoreNodeView {
+  attrs: Record<string, unknown>;
 }
 
 export interface CoreNodeSpec {
@@ -101,8 +124,9 @@ export interface CoreNodeSpec {
   inline?: boolean;
   atom?: boolean;
   marks?: string;
-  parseDOM?: CoreParseRule[];
-  toDOM?: () => DomOutputSpec;
+  attrs?: Record<string, CoreAttrSpec>;
+  parseDOM?: CoreTagParseRule[];
+  toDOM?: (node: CoreNodeView) => DomOutputSpec;
 }
 
 export interface CoreMarkSpec {

@@ -1,4 +1,4 @@
-export { coreMarks, coreNodes } from "./core-spec";
+export { coreMarks, coreNodes, UNKNOWN_BLOCK, UNKNOWN_INLINE } from "./core-spec";
 export {
   createEmptyEnvelope,
   ENVELOPE_VERSION,

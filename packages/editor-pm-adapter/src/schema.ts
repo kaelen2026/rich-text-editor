@@ -1,6 +1,12 @@
 import { coreMarks, coreNodes } from "@kaelen/editor-schema";
-import type { CoreMarkSpec, CoreNodeSpec } from "@kaelen/editor-shared-types";
-import { type MarkSpec, type NodeSpec, Schema } from "prosemirror-model";
+import type { CoreMarkSpec, CoreNodeSpec, DomOutputSpec } from "@kaelen/editor-shared-types";
+import {
+  type DOMOutputSpec,
+  type MarkSpec,
+  type NodeSpec,
+  type Node as ProseMirrorNode,
+  Schema,
+} from "prosemirror-model";
 
 /**
  * 把平台自有的 Spec 装配为 ProseMirror Schema。
@@ -11,15 +17,45 @@ import { type MarkSpec, type NodeSpec, Schema } from "prosemirror-model";
  */
 export function buildSchema(): Schema {
   return new Schema({
-    nodes: mapSpecs<CoreNodeSpec, NodeSpec>(coreNodes),
-    marks: mapSpecs<CoreMarkSpec, MarkSpec>(coreMarks),
+    nodes: mapSpecs(coreNodes, toNodeSpec),
+    marks: mapSpecs(coreMarks, toMarkSpec),
   });
 }
 
-function mapSpecs<TIn, TOut>(specs: Record<string, TIn>): Record<string, TOut> {
+function mapSpecs<TIn, TOut>(
+  specs: Record<string, TIn>,
+  map: (spec: TIn) => TOut,
+): Record<string, TOut> {
   const mapped: Record<string, TOut> = {};
   for (const [name, spec] of Object.entries(specs)) {
-    mapped[name] = spec as unknown as TOut;
+    mapped[name] = map(spec);
   }
   return mapped;
+}
+
+/**
+ * 渲染函数只收到 `{ attrs }`，拿不到 ProseMirror 节点。这个包装是"`toDOM`
+ * 不得访问 `document` 或文档内部"这条约束的结构性保障，不只是约定。
+ */
+function toNodeSpec(spec: CoreNodeSpec): NodeSpec {
+  const { toDOM, ...rest } = spec;
+  if (!toDOM) {
+    return rest;
+  }
+  return {
+    ...rest,
+    toDOM: (node: ProseMirrorNode) => asDomOutputSpec(toDOM({ attrs: node.attrs })),
+  };
+}
+
+function toMarkSpec(spec: CoreMarkSpec): MarkSpec {
+  const { toDOM, ...rest } = spec;
+  if (!toDOM) {
+    return rest;
+  }
+  return { ...rest, toDOM: () => asDomOutputSpec(toDOM()) };
+}
+
+function asDomOutputSpec(spec: DomOutputSpec): DOMOutputSpec {
+  return spec as DOMOutputSpec;
 }
