@@ -41,8 +41,13 @@ export interface EditorEnvelope {
   annotations: Annotation[];
 }
 
+/** 读取时接受当前信封，或 S3 兼容的裸 ProseMirror `doc` JSON。 */
+export type EditorDocumentInput = EditorEnvelope | NodeJSON;
+
 export interface LoadResult {
   ok: boolean;
+  /** 读取时是否执行过 schema 迁移。 */
+  migrated: boolean;
   /** 是否有内容被降级为只读兜底节点。宿主据此提示用户。 */
   degraded: boolean;
   /** 被兜底的节点名，按文档顺序去重。 */

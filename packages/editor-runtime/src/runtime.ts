@@ -1,8 +1,9 @@
 import { buildSchema, coreCommands, EditorSession } from "@kaelen/editor-pm-adapter";
-import { createEmptyEnvelope, validateEnvelope } from "@kaelen/editor-schema";
+import { createEmptyEnvelope, migrateDocument } from "@kaelen/editor-schema";
 import type {
   CommandQuery,
   CommandResult,
+  EditorDocumentInput,
   EditorEnvelope,
   EditorEventName,
   EditorSnapshot,
@@ -10,7 +11,7 @@ import type {
 } from "@kaelen/editor-shared-types";
 
 export interface Runtime {
-  loadDocument(envelope: EditorEnvelope): LoadResult;
+  loadDocument(input: EditorDocumentInput): LoadResult;
   getDocument(): EditorEnvelope;
   execute(command: string): CommandResult;
   queryCommand(command: string): CommandQuery;
@@ -64,16 +65,29 @@ export function createRuntime(): Runtime {
   });
 
   return {
-    loadDocument(envelope: EditorEnvelope): LoadResult {
-      const errors = validateEnvelope(envelope);
-      if (errors.length > 0) {
-        return { ok: false, degraded: false, unknownNodes: [], errors };
+    loadDocument(input: EditorDocumentInput): LoadResult {
+      const migration = migrateDocument(input);
+      if (!migration.ok) {
+        return {
+          ok: false,
+          migrated: false,
+          degraded: false,
+          unknownNodes: [],
+          errors: migration.errors,
+        };
       }
+      const { envelope } = migration;
       let unknownNodes: string[];
       try {
         unknownNodes = session.replaceDoc(envelope.doc);
       } catch (error) {
-        return { ok: false, degraded: false, unknownNodes: [], errors: [describe(error)] };
+        return {
+          ok: false,
+          migrated: migration.migrated,
+          degraded: false,
+          unknownNodes: [],
+          errors: [describe(error)],
+        };
       }
       meta = toMeta(envelope);
       // 装载是初始化，不是用户编辑：修订号与脏标记归零。
@@ -83,7 +97,12 @@ export function createRuntime(): Runtime {
       if (unknownNodes.length > 0) {
         emit("documentDegraded");
       }
-      return { ok: true, degraded: unknownNodes.length > 0, unknownNodes };
+      return {
+        ok: true,
+        migrated: migration.migrated,
+        degraded: unknownNodes.length > 0,
+        unknownNodes,
+      };
     },
 
     getDocument(): EditorEnvelope {

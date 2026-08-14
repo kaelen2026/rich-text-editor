@@ -1,0 +1,28 @@
+{
+  "type": "doc",
+  "content": [
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "text",
+          "text": "旧内容"
+        }
+      ]
+    },
+    {
+      "type": "co_legacy_widget",
+      "attrs": {
+        "legacyId": "widget-1"
+      },
+      "content": [
+        {
+          "type": "co_legacy_part",
+          "attrs": {
+            "value": "完整保留"
+          }
+        }
+      ]
+    }
+  ]
+}

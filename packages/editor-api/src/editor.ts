@@ -2,6 +2,7 @@ import { createRuntime } from "@kaelen/editor-runtime";
 import type {
   CommandQuery,
   CommandResult,
+  EditorDocumentInput,
   EditorEnvelope,
   EditorEventName,
   EditorSnapshot,
@@ -17,7 +18,7 @@ import type {
  */
 export interface RichEditor {
   /** 装载文档：不产生可撤销记录，用于初始化。 */
-  loadDocument(envelope: EditorEnvelope): LoadResult;
+  loadDocument(input: EditorDocumentInput): LoadResult;
   getDocument(): EditorEnvelope;
 
   execute(command: string): CommandResult;
@@ -48,7 +49,7 @@ export function createEditor(): RichEditor {
   const runtime = createRuntime();
 
   return {
-    loadDocument: (envelope) => runtime.loadDocument(envelope),
+    loadDocument: (input) => runtime.loadDocument(input),
     getDocument: () => runtime.getDocument(),
     execute: (command) => runtime.execute(command),
     queryCommand: (command) => runtime.queryCommand(command),

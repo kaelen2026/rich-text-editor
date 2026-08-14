@@ -1,0 +1,20 @@
+{
+  "envelope": 1,
+  "schemaVersion": 1,
+  "plugins": {},
+  "doc": {
+    "type": "doc",
+    "content": [
+      {
+        "type": "paragraph",
+        "content": [
+          {
+            "type": "text",
+            "text": "旧格式文档"
+          }
+        ]
+      }
+    ]
+  },
+  "annotations": []
+}
