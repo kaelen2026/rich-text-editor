@@ -1,1 +1,1 @@
-export { createEditor, type RichEditor } from "./editor";
+export { createEditor, type EditorOptions, type RichEditor } from "./editor";
