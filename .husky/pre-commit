@@ -1,0 +1,6 @@
+if [ "$(git branch --show-current)" = "main" ]; then
+  echo "Direct commits to main are prohibited. Create a branch and open a pull request." >&2
+  exit 1
+fi
+
+pnpm exec lint-staged
