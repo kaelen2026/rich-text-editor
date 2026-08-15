@@ -18,8 +18,8 @@
 
 | 状态 | 切片 |
 | --- | --- |
-| 已合并 | S1–S11、S13–S17；S13 的 y-prosemirror 前置验证已记录在 `docs/y-prosemirror-compatibility.md`。 |
-| 待决策 | S12：远端图片转存服务归属；S18：Vue 实际接入方与时间。 |
+| 已合并 | S1–S11、S13–S18；S13 的 y-prosemirror 前置验证已记录在 `docs/y-prosemirror-compatibility.md`。 |
+| 待决策 | S12：远端图片转存服务归属。 |
 
 S17 的已交付范围是基准文档、五项 Node/jsdom 测量、`getDocument()` 快照缓存和 CI 门禁。字数统计与 NodeView 懒挂载尚无对应的公开能力或 NodeView，后续在引入这些能力时单独实现和测量。
 
@@ -229,14 +229,13 @@ graph TD
 - **依赖**：S15、S16（需要完整内容类型与 UI 才测得准）。
 - **PRD**：§14
 
-### S18. Vue 适配层 · **HITL**
+### S18. Vue 适配层 · AFK
 
-- **动什么**：`editor-vue`（`shallowRef` 持实例、`onMounted` → `mount`、`onBeforeUnmount` → `unmount` 而非 `destroy`、Composable 消费 `getSnapshot`/`queryCommand`）、`editor-vue-ui`（消费同一个 `editor-ui-model`）、NodeView 用 `<Teleport>` 渲染进宿主应用树。
-- **演示**：Vue playground 加载与 React 完全相同的信封 JSON，编辑、保存、重新打开一致；NodeView 内的组件能拿到宿主应用的 provide/inject。
-- **验证**：跨框架一致性测试（同一 fixture + 同一操作序列，两端产出的文档 JSON 全等）+ Vue 侧挂载/卸载幂等。
+- **已交付**：`editor-vue` 提供实例注入、`EditorContent` 与 `useEditorSnapshot` / `useCommandQuery` 等 Composable；`editor-vue-ui` 使用同一个 `editor-ui-model` 渲染 ARIA toolbar。组件在 `onMounted` 调用 `mount`，在 `onBeforeUnmount` 调用 `unmount`，不销毁业务实例。
+- **NodeView 约束**：当前内核尚无自定义 NodeView；首个 Vue NodeView 必须通过 `<Teleport>` 渲染进宿主应用树，不能创建独立 Vue app。
+- **验证**：Vue 侧挂载/卸载保留实例，工具栏可执行命令；两者均由 jsdom 单测覆盖。
 - **回滚**：单 commit，不影响 React 链路。
 - **依赖**：S16（复用 UI 模型，否则两套 UI 必然行为漂移）。
-- **HITL 决策**：Vue 的实际接入方与上线时间（方案文档 §19 第 10 项）。内核已框架无关，推迟本片成本为零；与 React 并行做成本立刻翻倍。没有明确业务方与时间点就保持在此位置不提前。
 
 ## 4. 不可回滚边界
 
@@ -255,10 +254,9 @@ graph TD
 
 ## 5. 需要先定掉的 HITL 决策
 
-只有两片是 HITL，且都因为一个待定事实，不是因为技术不清楚：
+只有一片是 HITL，且因为一个待定事实，不是因为技术不清楚：
 
 1. **S12 的转存服务归属** —— 复用现有后端 / 新起 Node 服务 / 只交付客户端策略与接口契约。改变该片交付物边界。
-2. **S18 的 Vue 接入方与时间** —— 决定它留在原位还是提前。
 
 另有一项**不构成切片的前置义务**（方案 §9.4）：在 S13 完成前完成 `y-prosemirror` 与本方案 Schema/NodeView（尤其表格与自定义 NodeView）的兼容性验证。它是一个决策任务不是可上线的片，产出是一个结论：M4 换 Yjs UndoManager 时影响面是否仍限于 `editor-pm-adapter`。别拖到 M4 才发现不兼容。
 
