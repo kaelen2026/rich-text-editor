@@ -1,7 +1,8 @@
-import type { NodeJSON } from "@kaelen/editor-shared-types";
+import type { EditorMode, NodeJSON } from "@kaelen/editor-shared-types";
 import { type MarkType, Node as ProseMirrorNode, type Schema } from "prosemirror-model";
 import { type Command, EditorState, type Transaction } from "prosemirror-state";
-import { EditorView } from "prosemirror-view";
+import { type DirectEditorProps, EditorView } from "prosemirror-view";
+import { isBlockOfType, isCheckedTaskItem, isWithinNode } from "./block-commands";
 import { editorPlugins } from "./plugins";
 import { restoreDoc, sanitizeDoc } from "./unknown";
 
@@ -24,12 +25,15 @@ export interface SelectionRange {
 export class EditorSession {
   private state: EditorState;
   private view: EditorView | null = null;
+  private mode: EditorMode;
 
   constructor(
     private readonly schema: Schema,
     doc: NodeJSON,
     private readonly onChange: SessionChangeListener = () => {},
+    mode: EditorMode = "edit",
   ) {
+    this.mode = mode;
     this.state = EditorState.create({
       schema,
       doc: ProseMirrorNode.fromJSON(schema, sanitizeDoc(schema, doc).doc),
@@ -43,6 +47,41 @@ export class EditorSession {
 
   get mounted(): boolean {
     return this.view !== null;
+  }
+
+  get currentMode(): EditorMode {
+    return this.mode;
+  }
+
+  /** 切换三态。视图已挂载时就地改属性，不重建，选区与历史都保住。 */
+  setMode(mode: EditorMode): void {
+    if (this.mode === mode) {
+      return;
+    }
+    this.mode = mode;
+    this.view?.setProps(this.modeProps());
+  }
+
+  /**
+   * 三态的 DOM 表达。只读态补 `tabindex="0"`：`contenteditable="false"` 的
+   * 元素默认不进 Tab 序，而只读要求可聚焦、可选中、可复制；禁用态刻意不补，
+   * 于是它自然落在 Tab 序之外（方案 §4.1、§15）。
+   */
+  private modeProps(): Partial<DirectEditorProps> {
+    return {
+      editable: () => this.mode === "edit",
+      attributes: () => {
+        const attributes: Record<string, string> = { "data-mode": this.mode };
+        if (this.mode === "readonly") {
+          attributes.tabindex = "0";
+          attributes["aria-readonly"] = "true";
+        }
+        if (this.mode === "disabled") {
+          attributes["aria-disabled"] = "true";
+        }
+        return attributes;
+      },
+    };
   }
 
   get selection(): SelectionRange {
@@ -87,6 +126,7 @@ export class EditorSession {
     this.view = new EditorView(element, {
       state: this.state,
       dispatchTransaction: (transaction) => this.applyTransaction(transaction),
+      ...this.modeProps(),
     });
   }
 
@@ -123,6 +163,28 @@ export class EditorSession {
       return command(this.state);
     }
     return command(this.state, (transaction) => this.dispatch(transaction));
+  }
+
+  /**
+   * 需要 Schema 才能构造的命令走这里。命令工厂拿不到状态与视图，
+   * ProseMirror 类型因此仍然止于本包（方案 §7.1）。
+   */
+  applySchemaCommand(build: (schema: Schema) => Command, apply: boolean): boolean {
+    return this.applyCommand(build(this.schema), apply);
+  }
+
+  /** 选区覆盖的文本块是否都是该类型（并且属性一致）。 */
+  isBlockActive(nodeName: string, attrs?: Record<string, unknown>): boolean {
+    return isBlockOfType(this.state, nodeName, attrs);
+  }
+
+  /** 选区是否位于某个结构容器（引用、列表）之内。 */
+  isWithin(nodeName: string): boolean {
+    return isWithinNode(this.state, nodeName);
+  }
+
+  isTaskChecked(): boolean {
+    return isCheckedTaskItem(this.state);
   }
 
   private dispatch(transaction: Transaction): void {

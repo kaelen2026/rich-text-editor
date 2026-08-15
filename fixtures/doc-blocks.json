@@ -1,0 +1,217 @@
+{
+  "envelope": 1,
+  "schemaVersion": 1,
+  "plugins": {},
+  "doc": {
+    "type": "doc",
+    "content": [
+      {
+        "type": "heading",
+        "attrs": {
+          "level": 1
+        },
+        "content": [
+          {
+            "type": "text",
+            "text": "一级标题"
+          }
+        ]
+      },
+      {
+        "type": "heading",
+        "attrs": {
+          "level": 4
+        },
+        "content": [
+          {
+            "type": "text",
+            "text": "四级标题"
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": [
+          {
+            "type": "text",
+            "marks": [
+              {
+                "type": "strong"
+              }
+            ],
+            "text": "粗体"
+          },
+          {
+            "type": "text",
+            "marks": [
+              {
+                "type": "em"
+              }
+            ],
+            "text": "斜体"
+          },
+          {
+            "type": "text",
+            "marks": [
+              {
+                "type": "underline"
+              }
+            ],
+            "text": "下划线"
+          },
+          {
+            "type": "text",
+            "marks": [
+              {
+                "type": "strikethrough"
+              }
+            ],
+            "text": "删除线"
+          },
+          {
+            "type": "text",
+            "marks": [
+              {
+                "type": "code"
+              }
+            ],
+            "text": "inline code"
+          },
+          {
+            "type": "hard_break"
+          },
+          {
+            "type": "text",
+            "text": "软换行之后"
+          }
+        ]
+      },
+      {
+        "type": "blockquote",
+        "content": [
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "type": "text",
+                "text": "被引用的段落"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "horizontal_rule"
+      },
+      {
+        "type": "bullet_list",
+        "content": [
+          {
+            "type": "list_item",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "一级项"
+                  }
+                ]
+              },
+              {
+                "type": "bullet_list",
+                "content": [
+                  {
+                    "type": "list_item",
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "二级项"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "ordered_list",
+        "attrs": {
+          "start": 3
+        },
+        "content": [
+          {
+            "type": "list_item",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "从第三项开始"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "task_list",
+        "content": [
+          {
+            "type": "task_item",
+            "attrs": {
+              "checked": true
+            },
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "已完成"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "task_item",
+            "attrs": {
+              "checked": false
+            },
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "未完成"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "code_block",
+        "content": [
+          {
+            "type": "text",
+            "text": "const a = 1;\nconst b = 2;"
+          }
+        ]
+      }
+    ]
+  },
+  "annotations": []
+}

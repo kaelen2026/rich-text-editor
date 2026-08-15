@@ -139,6 +139,15 @@ export interface EditorEventPayload {
 }
 
 /**
+ * 编辑器三态。语义互不相同，不能用一个布尔量表达（方案 §4.1）：
+ *
+ * - `edit`：可编辑。
+ * - `readonly`：不可编辑，但**可聚焦、可选中、可复制**——阅读态要能取词。
+ * - `disabled`：不可编辑且**不可聚焦**，不进 Tab 序，对辅助技术报 `aria-disabled`。
+ */
+export type EditorMode = "edit" | "readonly" | "disabled";
+
+/**
  * 引用稳定的状态快照：状态未变时必须返回同一个对象。
  * React 18 的 `useSyncExternalStore` 要求 getSnapshot 可缓存，
  * 每次返回新对象会直接抛 `The result of getSnapshot should be cached`。
@@ -150,6 +159,7 @@ export interface EditorSnapshot {
   stateRevision: number;
   dirty: boolean;
   mounted: boolean;
+  mode: EditorMode;
 }
 
 /**
@@ -163,6 +173,14 @@ export type DomOutputSpecChild = DomOutputSpec | Record<string, string> | 0;
 export interface CoreTagParseRule {
   tag: string;
   priority?: number;
+  /**
+   * 该规则命中时写入的固定属性，例如 `h2` → `{ level: 2 }`。
+   * 刻意只支持常量而不是 `getAttrs` 函数：解析规则要能在服务端复用，
+   * 也要能被审计——一个能跑任意代码的钩子两样都做不到。
+   */
+  attrs?: Record<string, unknown>;
+  /** 代码块等需要保留原样空白的节点。 */
+  preserveWhitespace?: boolean | "full";
 }
 
 export interface CoreStyleParseRule {
@@ -196,6 +214,16 @@ export interface CoreNodeSpec {
   inline?: boolean;
   atom?: boolean;
   marks?: string;
+  /** 内容按代码处理：不做智能替换，粘贴一律纯文本。 */
+  code?: boolean;
+  /** 保留原样空白，配合 `code` 使用。 */
+  whitespace?: "pre" | "normal";
+  /**
+   * 有自身语义、不该在替换内容时被顺手拆掉的块（标题、列表项、代码块）。
+   * 少了它，往标题里粘一段带结构的内容会把标题本身弄没。
+   */
+  defining?: boolean;
+  selectable?: boolean;
   attrs?: Record<string, CoreAttrSpec>;
   parseDOM?: CoreTagParseRule[];
   toDOM?: (node: CoreNodeView) => DomOutputSpec;

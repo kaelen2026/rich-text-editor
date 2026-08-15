@@ -62,8 +62,8 @@ export function usePluginErrors(): readonly PluginError[] {
 }
 
 /** 工具栏按钮所需的状态。不读文档，只查命令。 */
-export function useCommandQuery(command: string): CommandQuery {
+export function useCommandQuery(command: string, input?: unknown): CommandQuery {
   const editor = useEditor();
   useEditorSnapshot();
-  return editor.queryCommand(command);
+  return editor.queryCommand(command, input);
 }

@@ -1,31 +1,76 @@
 import { UNKNOWN_BLOCK, UNKNOWN_INLINE } from "@kaelen/editor-schema";
-import { baseKeymap, toggleMark } from "prosemirror-commands";
+import { baseKeymap, chainCommands, newlineInCode, toggleMark } from "prosemirror-commands";
 import { history, redo, undo } from "prosemirror-history";
 import { keymap } from "prosemirror-keymap";
 import type { MarkType, NodeType, Schema } from "prosemirror-model";
 import { type Command, Plugin, type Transaction } from "prosemirror-state";
+import {
+  indentListItem,
+  insertHardBreak,
+  insertHorizontalRule,
+  outdentListItem,
+  setParagraph,
+  splitListItemCommand,
+  toggleBlockquote,
+  toggleCodeBlock,
+  toggleHeading,
+  toggleList,
+} from "./block-commands";
+
+/** 快捷键与工具栏走同一批命令实现，两条路径不会各自漂移。 */
+function shortcutBindings(schema: Schema): Record<string, Command> {
+  const bindings: Record<string, Command> = {
+    "Mod-z": undo,
+    "Mod-y": redo,
+    "Shift-Mod-z": redo,
+
+    "Mod-Alt-0": setParagraph(schema),
+    "Mod->": toggleBlockquote(schema),
+    "Mod-Alt-c": toggleCodeBlock(schema),
+    "Mod-Alt-r": insertHorizontalRule(schema),
+    "Mod-Shift-8": toggleList(schema, "bullet_list"),
+    "Mod-Shift-9": toggleList(schema, "ordered_list"),
+    "Mod-Shift-7": toggleList(schema, "task_list"),
+
+    // 列表内才生效；不在列表里返回 false，Tab 因此仍然把焦点移出编辑区。
+    Tab: indentListItem(schema),
+    "Shift-Tab": outdentListItem(schema),
+    Enter: splitListItemCommand(schema),
+    // 代码块里换行不插 hard_break：那会在 `text*` 内容里塞进一个非法节点。
+    "Shift-Enter": chainCommands(newlineInCode, insertHardBreak(schema)),
+  };
+
+  for (let level = 1; level <= 4; level += 1) {
+    bindings[`Mod-Alt-${level}`] = toggleHeading(schema, level);
+  }
+
+  for (const [key, markName] of [
+    ["Mod-b", "strong"],
+    ["Mod-i", "em"],
+    ["Mod-u", "underline"],
+    ["Mod-Shift-x", "strikethrough"],
+    ["Mod-e", "code"],
+  ] as const) {
+    const markType = schema.marks[markName];
+    if (markType) {
+      bindings[key] = toggleMark(markType, undefined, { removeWhenPresent: false });
+    }
+  }
+
+  return bindings;
+}
 
 /**
  * 状态插件。历史被限制在这一处，上层只通过 `history.undo`/`history.redo`
  * 命令访问——M4 换成 Yjs UndoManager 时影响面止于此包（方案 §9.4）。
  */
 export function editorPlugins(schema: Schema): Plugin[] {
-  const bindings: Record<string, Command> = {
-    "Mod-z": undo,
-    "Mod-y": redo,
-    "Shift-Mod-z": redo,
-  };
-
-  const strong = schema.marks.strong;
-  if (strong) {
-    bindings["Mod-b"] = toggleMark(strong, undefined, { removeWhenPresent: false });
-  }
-  const em = schema.marks.em;
-  if (em) {
-    bindings["Mod-i"] = toggleMark(em, undefined, { removeWhenPresent: false });
-  }
-
-  return [history(), keymap(bindings), keymap(baseKeymap), unknownNodeGuard(schema)];
+  return [
+    history(),
+    keymap(shortcutBindings(schema)),
+    keymap(baseKeymap),
+    unknownNodeGuard(schema),
+  ];
 }
 
 /**

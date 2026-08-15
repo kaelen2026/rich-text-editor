@@ -186,10 +186,11 @@ describe("插件命令冲突", () => {
 
     expect(enabledNames(resolution)).toEqual(["link"]);
     expect(resolution.commands.get("link.set")?.owner).toBe("link");
-    expect(resolution.commands.has("format.underline")).toBe(false);
+    // S6 已将 underline 变为核心命令；冲突插件不能覆盖它。
+    expect(resolution.commands.get("format.underline")?.owner).toBeUndefined();
     expect(resolution.commands.has("bare")).toBe(false);
     expect(
       resolution.errors.filter((error) => error.kind === "invalidName").map((error) => error.item),
-    ).toEqual(["format.underline", "bare"]);
+    ).toEqual(["bare"]);
   });
 });

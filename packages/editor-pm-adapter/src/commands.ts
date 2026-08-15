@@ -1,6 +1,19 @@
+import { isHeadingLevel } from "@kaelen/editor-schema";
 import type { CommandResult } from "@kaelen/editor-shared-types";
 import { selectAll, toggleMark } from "prosemirror-commands";
 import { redo, undo } from "prosemirror-history";
+import {
+  indentListItem,
+  insertHardBreak,
+  insertHorizontalRule,
+  outdentListItem,
+  setParagraph,
+  toggleBlockquote,
+  toggleChecked,
+  toggleCodeBlock,
+  toggleHeading,
+  toggleList,
+} from "./block-commands";
 import type { EditorSession } from "./session";
 
 /**
@@ -9,16 +22,76 @@ import type { EditorSession } from "./session";
 export interface SessionCommand {
   run(session: EditorSession, apply: boolean, input?: unknown): CommandResult;
   /** 需要参数的命令可单独提供无副作用的可用性判断。 */
-  enabled?(session: EditorSession): boolean;
-  active(session: EditorSession): boolean;
+  enabled?(session: EditorSession, input?: unknown): boolean;
+  active(session: EditorSession, input?: unknown): boolean;
+  /** 只读态仍可执行（不改文档的命令，例如全选）。默认 false。 */
+  readOnly?: boolean;
 }
 
 export const coreCommands: Record<string, SessionCommand> = {
   "format.bold": markCommand("strong"),
   "format.italic": markCommand("em"),
+  "format.underline": markCommand("underline"),
+  "format.strikethrough": markCommand("strikethrough"),
+  "format.code": markCommand("code"),
+
+  "block.setParagraph": {
+    run: (session, apply) => commandResult(session.applySchemaCommand(setParagraph, apply)),
+    active: (session) => session.isBlockActive("paragraph"),
+  },
+  "block.setHeading": {
+    run: (session, apply, input) => {
+      const level = headingLevelFrom(input);
+      if (level === undefined) {
+        return { ok: false, reason: "invalid", detail: "标题层级仅支持 1–4" };
+      }
+      return commandResult(
+        session.applySchemaCommand((schema) => toggleHeading(schema, level), apply),
+      );
+    },
+    active: (session, input) => {
+      const level = headingLevelFrom(input);
+      return level !== undefined && session.isBlockActive("heading", { level });
+    },
+  },
+  "block.toggleBlockquote": {
+    run: (session, apply) => commandResult(session.applySchemaCommand(toggleBlockquote, apply)),
+    active: (session) => session.isWithin("blockquote"),
+  },
+  "block.toggleCodeBlock": {
+    run: (session, apply) => commandResult(session.applySchemaCommand(toggleCodeBlock, apply)),
+    active: (session) => session.isBlockActive("code_block"),
+  },
+  "block.insertHorizontalRule": {
+    run: (session, apply) => commandResult(session.applySchemaCommand(insertHorizontalRule, apply)),
+    active: () => false,
+  },
+  "block.insertHardBreak": {
+    run: (session, apply) => commandResult(session.applySchemaCommand(insertHardBreak, apply)),
+    active: () => false,
+  },
+
+  "list.toggleBullet": listCommand("bullet_list"),
+  "list.toggleOrdered": listCommand("ordered_list"),
+  "list.toggleTask": listCommand("task_list"),
+  "list.indent": {
+    run: (session, apply) => commandResult(session.applySchemaCommand(indentListItem, apply)),
+    active: () => false,
+  },
+  "list.outdent": {
+    run: (session, apply) => commandResult(session.applySchemaCommand(outdentListItem, apply)),
+    active: () => false,
+  },
+  "list.toggleChecked": {
+    run: (session, apply) => commandResult(session.applySchemaCommand(toggleChecked, apply)),
+    active: (session) => session.isTaskChecked(),
+  },
+
   "selection.selectAll": {
     run: (session, apply) => commandResult(session.applyCommand(selectAll, apply)),
     active: () => false,
+    // 只读态可选中可复制，全选因此仍然可用（方案 §4.1）。
+    readOnly: true,
   },
   "history.undo": {
     run: (session, apply) => commandResult(session.applyCommand(undo, apply)),
@@ -29,6 +102,14 @@ export const coreCommands: Record<string, SessionCommand> = {
     active: () => false,
   },
 };
+
+function listCommand(listName: string): SessionCommand {
+  return {
+    run: (session, apply) =>
+      commandResult(session.applySchemaCommand((schema) => toggleList(schema, listName), apply)),
+    active: (session) => session.isWithin(listName),
+  };
+}
 
 function markCommand(markName: string): SessionCommand {
   return {
@@ -45,6 +126,18 @@ function markCommand(markName: string): SessionCommand {
       ),
     active: (session) => session.isMarkActive(markName),
   };
+}
+
+/** 标题层级既可以直接传数字，也可以传 `{ level }`。 */
+function headingLevelFrom(input: unknown): number | undefined {
+  if (isHeadingLevel(input)) {
+    return input;
+  }
+  if (typeof input === "object" && input !== null && "level" in input) {
+    const level = (input as { level: unknown }).level;
+    return isHeadingLevel(level) ? level : undefined;
+  }
+  return undefined;
 }
 
 function commandResult(ok: boolean): CommandResult {

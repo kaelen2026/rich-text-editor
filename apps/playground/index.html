@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>富文本编辑器 · 插件冲突降级与熔断</title>
+    <title>富文本编辑器 · 块级结构与插件熔断</title>
     <style>
       :root {
         color-scheme: light dark;
@@ -27,8 +27,21 @@
         display: flex;
         gap: 8px;
         align-items: center;
-        margin-bottom: 12px;
+        margin-bottom: 8px;
         flex-wrap: wrap;
+      }
+      .toolbar:last-of-type {
+        margin-bottom: 12px;
+      }
+      .mode {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+      }
+      .mode select {
+        font: inherit;
+        font-size: 13px;
       }
       .toolbar button {
         font: inherit;
@@ -58,12 +71,103 @@
         padding: 12px 16px;
         min-height: 160px;
       }
+      pre {
+        border: 1px solid rgba(128, 128, 128, 0.4);
+        border-radius: 6px;
+        padding: 12px;
+        overflow-x: auto;
+        font-size: 12px;
+      }
       .ProseMirror {
         outline: none;
         line-height: 1.7;
       }
       .ProseMirror p {
         margin: 0 0 0.75em;
+      }
+      .ProseMirror h1,
+      .ProseMirror h2,
+      .ProseMirror h3,
+      .ProseMirror h4 {
+        margin: 1em 0 0.5em;
+        line-height: 1.3;
+      }
+      .ProseMirror h1 {
+        font-size: 1.6em;
+      }
+      .ProseMirror h2 {
+        font-size: 1.35em;
+      }
+      .ProseMirror h3 {
+        font-size: 1.15em;
+      }
+      .ProseMirror h4 {
+        font-size: 1em;
+      }
+      .ProseMirror blockquote {
+        margin: 0 0 0.75em;
+        padding-left: 12px;
+        border-left: 3px solid rgba(128, 128, 128, 0.5);
+        opacity: 0.9;
+      }
+      .ProseMirror hr {
+        border: none;
+        border-top: 1px solid rgba(128, 128, 128, 0.5);
+        margin: 1em 0;
+      }
+      .ProseMirror pre {
+        background: rgba(128, 128, 128, 0.12);
+        border: none;
+        border-radius: 6px;
+        padding: 10px 12px;
+        white-space: pre-wrap;
+        font-size: 13px;
+      }
+      .ProseMirror code {
+        background: rgba(128, 128, 128, 0.18);
+        border-radius: 3px;
+        padding: 1px 4px;
+        font-size: 0.92em;
+      }
+      .ProseMirror pre code {
+        background: none;
+        padding: 0;
+      }
+      .ProseMirror ul,
+      .ProseMirror ol {
+        margin: 0 0 0.75em;
+        padding-left: 1.6em;
+      }
+      .ProseMirror li > p {
+        margin: 0 0 0.25em;
+      }
+      /* 勾选框用 CSS 画：`toDOM` 只能返回纯数据，可点的复选框要等 NodeView。 */
+      .ProseMirror ul[data-type="task-list"] {
+        list-style: none;
+        padding-left: 1.2em;
+      }
+      .ProseMirror ul[data-type="task-list"] > li {
+        position: relative;
+      }
+      .ProseMirror ul[data-type="task-list"] > li::before {
+        content: "☐";
+        position: absolute;
+        left: -1.2em;
+      }
+      .ProseMirror ul[data-type="task-list"] > li[data-checked="true"]::before {
+        content: "☑";
+      }
+      .ProseMirror ul[data-type="task-list"] > li[data-checked="true"] {
+        opacity: 0.6;
+        text-decoration: line-through;
+      }
+      .ProseMirror[data-mode="readonly"] {
+        cursor: default;
+      }
+      .ProseMirror[data-mode="disabled"] {
+        opacity: 0.5;
+        cursor: not-allowed;
+        user-select: none;
       }
       .warning {
         font-size: 13px;
@@ -104,13 +208,6 @@
       div.co-unknown {
         display: block;
         margin: 0 0 0.75em;
-      }
-      pre {
-        border: 1px solid rgba(128, 128, 128, 0.4);
-        border-radius: 6px;
-        padding: 12px;
-        overflow-x: auto;
-        font-size: 12px;
       }
     </style>
   </head>

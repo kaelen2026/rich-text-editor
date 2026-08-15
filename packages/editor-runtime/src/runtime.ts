@@ -1,4 +1,4 @@
-import { buildSchema, EditorSession } from "@kaelen/editor-pm-adapter";
+import { buildSchema, EditorSession, type SessionCommand } from "@kaelen/editor-pm-adapter";
 import {
   assertMigrationsDeclareReversibility,
   cloneJson,
@@ -13,6 +13,7 @@ import type {
   EditorEnvelope,
   EditorEventName,
   EditorEventPayload,
+  EditorMode,
   EditorSnapshot,
   LoadResult,
   NodeJSON,
@@ -25,7 +26,9 @@ export interface Runtime {
   loadDocument(input: EditorEnvelope | NodeJSON): LoadResult;
   getDocument(): EditorEnvelope;
   execute(command: string, input?: unknown): CommandResult;
-  queryCommand(command: string): CommandQuery;
+  queryCommand(command: string, input?: unknown): CommandQuery;
+  getMode(): EditorMode;
+  setMode(mode: EditorMode): void;
   getSnapshot(): EditorSnapshot;
   subscribe<TEvent extends EditorEventName>(
     event: TEvent,
@@ -54,6 +57,8 @@ export interface RuntimeOptions {
   plugins?: EditorPlugin[];
   /** 文档结构迁移。后续由插件通过注册中心贡献（方案 §8.3）。 */
   migrations?: DocumentMigration[];
+  /** 初始三态，默认可编辑（方案 §4.1）。 */
+  mode?: EditorMode;
 }
 
 /** 事件载荷在订阅处收敛为具体类型，这里只需要一个能装下所有监听器的形状。 */
@@ -113,13 +118,33 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
     return pluginError;
   }
 
-  const session = new EditorSession(schema, initial.doc, (docChanged) => {
-    if (docChanged) {
-      revision += 1;
-      dirty = true;
+  const session = new EditorSession(
+    schema,
+    initial.doc,
+    (docChanged) => {
+      if (docChanged) {
+        revision += 1;
+        dirty = true;
+      }
+      invalidate();
+    },
+    options.mode ?? "edit",
+  );
+
+  /**
+   * 三态对命令的门禁：禁用态一律拒绝，只读态只放行不改文档的命令。
+   * 门禁放在 runtime 而不是每条命令里，插件命令因此自动受同一条规则约束。
+   */
+  function modeRejection(command: SessionCommand): CommandResult | null {
+    const mode = session.currentMode;
+    if (mode === "disabled") {
+      return { ok: false, reason: "disabled", detail: "编辑器处于禁用态" };
     }
-    invalidate();
-  });
+    if (mode === "readonly" && command.readOnly !== true) {
+      return { ok: false, reason: "disabled", detail: "编辑器处于只读态" };
+    }
+    return null;
+  }
 
   return {
     loadDocument(input: EditorEnvelope | NodeJSON): LoadResult {
@@ -201,14 +226,19 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       if (!entry) {
         return { ok: false, reason: "disabled", detail: `未注册的命令：${command}` };
       }
+      const spec = entry.command;
+      const rejection = modeRejection(spec);
+      if (rejection) {
+        return rejection;
+      }
       // 核心命令不包裹：核心抛错是平台缺陷，掩盖它只会让问题更难查。
       if (entry.owner === undefined) {
-        return entry.command.run(session, true, input);
+        return spec.run(session, true, input);
       }
       if (breaker.isTripped(entry.owner)) {
         return { ok: false, reason: "disabled", detail: `插件 ${entry.owner} 已停用` };
       }
-      const outcome = session.runProtected(() => entry.command.run(session, true, input));
+      const outcome = session.runProtected(() => spec.run(session, true, input));
       if (outcome.ok) {
         return outcome.value;
       }
@@ -219,15 +249,22 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       };
     },
 
-    queryCommand(command: string): CommandQuery {
+    queryCommand(command: string, input?: unknown): CommandQuery {
       const entry = commands.get(command);
       if (destroyed || !entry) {
         return { enabled: false, active: false };
       }
-      const query = (): CommandQuery => ({
-        enabled: entry.command.enabled?.(session) ?? entry.command.run(session, false).ok,
-        active: entry.command.active(session),
-      });
+      const spec = entry.command;
+      const query = (): CommandQuery => {
+        const active = spec.active(session, input);
+        if (modeRejection(spec)) {
+          return { enabled: false, active };
+        }
+        return {
+          enabled: spec.enabled?.(session, input) ?? spec.run(session, false, input).ok,
+          active,
+        };
+      };
       if (entry.owner === undefined) {
         return query();
       }
@@ -243,9 +280,27 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       return { enabled: false, active: false };
     },
 
+    getMode(): EditorMode {
+      return session.currentMode;
+    },
+
+    setMode(mode: EditorMode): void {
+      if (destroyed || session.currentMode === mode) {
+        return;
+      }
+      session.setMode(mode);
+      invalidate();
+    },
+
     getSnapshot(): EditorSnapshot {
       if (!snapshot) {
-        snapshot = { revision, stateRevision, dirty, mounted: session.mounted };
+        snapshot = {
+          revision,
+          stateRevision,
+          dirty,
+          mounted: session.mounted,
+          mode: session.currentMode,
+        };
       }
       return snapshot;
     },
