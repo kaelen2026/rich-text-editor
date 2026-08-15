@@ -56,6 +56,9 @@ importers:
       '@kaelen/editor-plugin-link':
         specifier: workspace:*
         version: link:../../packages/editor-plugin-link
+      '@kaelen/editor-pm-adapter':
+        specifier: workspace:*
+        version: link:../../packages/editor-pm-adapter
       '@kaelen/editor-react':
         specifier: workspace:*
         version: link:../../packages/editor-react

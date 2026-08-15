@@ -8,6 +8,8 @@ import { restoreDoc, sanitizeDoc } from "./unknown";
 
 /** 状态变化通知。`docChanged` 区分内容变更与仅选区变更。 */
 export type SessionChangeListener = (docChanged: boolean) => void;
+/** 文档事务观察者。仅内部运行时使用，以便生成平台 patch 而不向业务泄漏 PM。 */
+export type SessionTransactionListener = (transaction: Transaction) => void;
 
 /** 受保护调用的结果。失败时状态已回滚，`error` 原样交给调用方上报。 */
 export type ProtectedOutcome<TValue> = { ok: true; value: TValue } | { ok: false; error: unknown };
@@ -32,6 +34,7 @@ export class EditorSession {
     doc: NodeJSON,
     private readonly onChange: SessionChangeListener = () => {},
     mode: EditorMode = "edit",
+    private readonly onDocumentTransaction: SessionTransactionListener = () => {},
   ) {
     this.mode = mode;
     this.state = EditorState.create({
@@ -200,6 +203,9 @@ export class EditorSession {
   private applyTransaction(transaction: Transaction): void {
     this.state = this.state.apply(transaction);
     this.view?.updateState(this.state);
+    if (transaction.docChanged) {
+      this.onDocumentTransaction(transaction);
+    }
     this.onChange(transaction.docChanged);
   }
 
