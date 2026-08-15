@@ -24,7 +24,7 @@ export interface RichEditor {
   loadDocument(input: EditorEnvelope | NodeJSON): LoadResult;
   getDocument(): EditorEnvelope;
 
-  execute(command: string): CommandResult;
+  execute(command: string, input?: unknown): CommandResult;
   /** 工具栏所需状态：能否执行、当前是否生效。 */
   queryCommand(command: string): CommandQuery;
 
@@ -56,7 +56,7 @@ export function createEditor(options: EditorOptions = {}): RichEditor {
   return {
     loadDocument: (input) => runtime.loadDocument(input),
     getDocument: () => runtime.getDocument(),
-    execute: (command) => runtime.execute(command),
+    execute: (command, input) => runtime.execute(command, input),
     queryCommand: (command) => runtime.queryCommand(command),
     getSnapshot: () => runtime.getSnapshot(),
     subscribe: (event, listener) => runtime.subscribe(event, listener),

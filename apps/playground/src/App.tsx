@@ -1,4 +1,5 @@
 import { createEditor, type RichEditor } from "@kaelen/editor-api";
+import { createLinkPlugin } from "@kaelen/editor-plugin-link";
 import {
   EditorContent,
   EditorProvider,
@@ -90,6 +91,8 @@ function Toolbar({ onSave, onLoadSample }: { onSave: () => void; onLoadSample: (
       <CommandButton command="format.italic" label="I" />
       <CommandButton command="history.undo" label="撤销" />
       <CommandButton command="history.redo" label="重做" />
+      <LinkButton />
+      <CommandButton command="link.unset" label="取消链接" />
       <button type="button" onClick={onSave}>
         保存
       </button>
@@ -103,10 +106,32 @@ function Toolbar({ onSave, onLoadSample }: { onSave: () => void; onLoadSample: (
   );
 }
 
+function LinkButton() {
+  const editor = useEditor();
+  const { enabled, active } = useCommandQuery("link.set");
+
+  return (
+    <button
+      type="button"
+      data-active={active}
+      disabled={!enabled}
+      onMouseDown={(event) => {
+        event.preventDefault();
+        const href = window.prompt("链接地址（仅 https/http/mailto/tel）", "https://");
+        if (href) {
+          editor.execute("link.set", { href });
+        }
+      }}
+    >
+      链接
+    </button>
+  );
+}
+
 export function App() {
   const bootRef = useRef<{ editor: RichEditor; unknownNodes: string[] } | null>(null);
   if (!bootRef.current) {
-    const editor = createEditor();
+    const editor = createEditor({ plugins: [createLinkPlugin()] });
     const result = editor.loadDocument(readStoredDocument());
     bootRef.current = { editor, unknownNodes: result.unknownNodes };
   }
@@ -130,10 +155,10 @@ export function App() {
 
   return (
     <EditorProvider editor={editor}>
-      <h1>富文本编辑器 · 最小可编辑闭环</h1>
+      <h1>富文本编辑器 · 插件运行时与链接</h1>
       <p className="hint">
-        输入文字，用 Cmd/Ctrl+B 加粗、Cmd/Ctrl+I 斜体、Cmd/Ctrl+Z 撤销；点"保存"写入
-        localStorage，刷新页面内容仍在。
+        输入文字，用 Cmd/Ctrl+B 加粗、Cmd/Ctrl+I 斜体、Cmd/Ctrl+Z 撤销；选中文本后可添加安全链接。
+        点"保存"写入 localStorage，刷新页面内容仍在。
       </p>
       {unknownNodes.length > 0 ? (
         <p className="warning">

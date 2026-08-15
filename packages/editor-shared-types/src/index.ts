@@ -61,11 +61,13 @@ export interface LoadResult {
   degraded: boolean;
   /** 被兜底的节点名，按文档顺序去重。 */
   unknownNodes: string[];
+  /** 被丢弃的未知标记名：文本保留、格式丢失，宿主应据此提示。 */
+  unknownMarks: string[];
   errors?: string[];
 }
 
 /** 命令失败原因可判别，便于线上定位（方案 §8.1）。 */
-export type CommandFailureReason = "disabled" | "destroyed";
+export type CommandFailureReason = "disabled" | "destroyed" | "invalid";
 
 export interface CommandResult {
   ok: boolean;
@@ -132,6 +134,11 @@ export interface CoreNodeView {
   attrs: Record<string, unknown>;
 }
 
+/** 标记渲染函数只可读取自身的持久化属性。 */
+export interface CoreMarkView {
+  attrs: Record<string, unknown>;
+}
+
 export interface CoreNodeSpec {
   content?: string;
   group?: string;
@@ -144,6 +151,7 @@ export interface CoreNodeSpec {
 }
 
 export interface CoreMarkSpec {
+  attrs?: Record<string, CoreAttrSpec>;
   parseDOM?: CoreParseRule[];
-  toDOM?: () => DomOutputSpec;
+  toDOM?: (mark: CoreMarkView) => DomOutputSpec;
 }

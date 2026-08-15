@@ -4,6 +4,7 @@ import {
   type DOMOutputSpec,
   type MarkSpec,
   type NodeSpec,
+  type Mark as ProseMirrorMark,
   type Node as ProseMirrorNode,
   Schema,
 } from "prosemirror-model";
@@ -15,10 +16,15 @@ import {
  * 需要与 ProseMirror 打交道的地方；`editor-schema` 自身对 ProseMirror 与 DOM
  * 都零依赖（方案 §7.1）。
  */
-export function buildSchema(): Schema {
+export interface SchemaExtensions {
+  nodes?: Record<string, CoreNodeSpec>;
+  marks?: Record<string, CoreMarkSpec>;
+}
+
+export function buildSchema(extensions: SchemaExtensions = {}): Schema {
   return new Schema({
-    nodes: mapSpecs(coreNodes, toNodeSpec),
-    marks: mapSpecs(coreMarks, toMarkSpec),
+    nodes: mapSpecs({ ...coreNodes, ...extensions.nodes }, toNodeSpec),
+    marks: mapSpecs({ ...coreMarks, ...extensions.marks }, toMarkSpec),
   });
 }
 
@@ -53,7 +59,10 @@ function toMarkSpec(spec: CoreMarkSpec): MarkSpec {
   if (!toDOM) {
     return rest;
   }
-  return { ...rest, toDOM: () => asDomOutputSpec(toDOM()) };
+  return {
+    ...rest,
+    toDOM: (mark: ProseMirrorMark) => asDomOutputSpec(toDOM({ attrs: mark.attrs })),
+  };
 }
 
 function asDomOutputSpec(spec: DomOutputSpec): DOMOutputSpec {
