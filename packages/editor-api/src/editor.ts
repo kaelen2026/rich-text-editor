@@ -1,4 +1,4 @@
-import { createRuntime } from "@kaelen/editor-runtime";
+import { createRuntime, type RuntimeOptions } from "@kaelen/editor-runtime";
 import type {
   CommandQuery,
   CommandResult,
@@ -6,6 +6,7 @@ import type {
   EditorEventName,
   EditorSnapshot,
   LoadResult,
+  NodeJSON,
 } from "@kaelen/editor-shared-types";
 
 /**
@@ -16,8 +17,11 @@ import type {
  * 可测试（方案 §7.1）。
  */
 export interface RichEditor {
-  /** 装载文档：不产生可撤销记录，用于初始化。 */
-  loadDocument(envelope: EditorEnvelope): LoadResult;
+  /**
+   * 装载文档：不产生可撤销记录，用于初始化。
+   * 也接受没有信封的裸文档节点（历史数据、手写 JSON），会自动迁移。
+   */
+  loadDocument(input: EditorEnvelope | NodeJSON): LoadResult;
   getDocument(): EditorEnvelope;
 
   execute(command: string): CommandResult;
@@ -44,11 +48,13 @@ export interface RichEditor {
   focus(): void;
 }
 
-export function createEditor(): RichEditor {
-  const runtime = createRuntime();
+export type EditorOptions = RuntimeOptions;
+
+export function createEditor(options: EditorOptions = {}): RichEditor {
+  const runtime = createRuntime(options);
 
   return {
-    loadDocument: (envelope) => runtime.loadDocument(envelope),
+    loadDocument: (input) => runtime.loadDocument(input),
     getDocument: () => runtime.getDocument(),
     execute: (command) => runtime.execute(command),
     queryCommand: (command) => runtime.queryCommand(command),

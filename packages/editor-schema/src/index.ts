@@ -6,3 +6,9 @@ export {
   stringifyEnvelope,
   validateEnvelope,
 } from "./envelope";
+export {
+  assertMigrationsDeclareReversibility,
+  type MigrateResult,
+  migrateEnvelope,
+  targetVersion,
+} from "./migrate";

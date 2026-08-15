@@ -1,1 +1,1 @@
-export { createRuntime, type Runtime } from "./runtime";
+export { createRuntime, type Runtime, type RuntimeOptions } from "./runtime";
