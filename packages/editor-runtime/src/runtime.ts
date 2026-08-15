@@ -153,6 +153,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       invalidate();
     },
     options.mode ?? "edit",
+    () => ({ schemaVersion: meta.schemaVersion, plugins: { ...meta.plugins } }),
     (transaction) => {
       pendingPatch = documentPatchFromTransaction(transaction, revision, revision + 1);
     },
