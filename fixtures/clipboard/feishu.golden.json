@@ -1,0 +1,13 @@
+[
+  {
+    "type": "paragraph",
+    "content": [
+      { "type": "text", "text": "飞书 " },
+      {
+        "type": "text",
+        "marks": [{ "type": "co_link", "attrs": { "href": "https://example.com/feishu" } }],
+        "text": "文档"
+      }
+    ]
+  }
+]

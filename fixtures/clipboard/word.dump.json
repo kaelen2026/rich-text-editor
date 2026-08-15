@@ -1,0 +1,5 @@
+{
+  "text/html": "<!--StartFragment--><h1 style=\"mso-style-name:Heading 1\">会议纪要</h1><p><strong>结论：</strong><a href=\"https://example.com/plan\">查看方案</a><img src=\"file:///C:/Users/Alice/Pictures/chart.png\"></p><ul><li>第一项</li></ul><!--EndFragment-->",
+  "text/plain": "会议纪要\n结论：查看方案\n第一项",
+  "application/x-company-editor+json": ""
+}

@@ -1,0 +1,27 @@
+[
+  {
+    "type": "heading",
+    "attrs": { "level": 1 },
+    "content": [{ "type": "text", "text": "会议纪要" }]
+  },
+  {
+    "type": "paragraph",
+    "content": [
+      { "type": "text", "marks": [{ "type": "strong" }], "text": "结论：" },
+      {
+        "type": "text",
+        "marks": [{ "type": "co_link", "attrs": { "href": "https://example.com/plan" } }],
+        "text": "查看方案"
+      }
+    ]
+  },
+  {
+    "type": "bullet_list",
+    "content": [
+      {
+        "type": "list_item",
+        "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "第一项" }] }]
+      }
+    ]
+  }
+]

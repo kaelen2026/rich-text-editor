@@ -1,4 +1,4 @@
-import type { NodeJSON } from "@kaelen/editor-shared-types";
+import type { ClipboardNotice, NodeJSON } from "@kaelen/editor-shared-types";
 import { Fragment, type Schema, Slice } from "prosemirror-model";
 import { Plugin } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
@@ -7,6 +7,11 @@ import { parseExternalHTML } from "./external-html";
 /** Safari 等环境可能丢掉它，因此只作为内部复制的快速通道。 */
 export const CLIPBOARD_MIME = "application/x-company-editor+json";
 export const CLIPBOARD_ATTRIBUTE = "data-co-slice";
+export type { ClipboardNotice } from "@kaelen/editor-shared-types";
+
+const MAX_PASTE_HTML_BYTES = 2 * 1024 * 1024;
+const MAX_PASTE_FILES = 20;
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
 export interface SliceJSON {
   content: NodeJSON[];
@@ -32,6 +37,8 @@ export interface ClipboardPluginOptions {
   acceptsSchemaVersion?(version: number): boolean;
   /** 图片/附件插件注册后在此接手文件；未接手时继续走 HTML/纯文本降级。 */
   handleFiles?(view: EditorView, files: FileList): boolean;
+  /** 粘贴被安全策略拒绝或降级时交给宿主呈现给用户。 */
+  onNotice?(notice: ClipboardNotice): void;
 }
 
 /** 将 ProseMirror Slice 化为不携带运行时对象的稳定 JSON。 */
@@ -171,9 +178,17 @@ export function createClipboardPlugin(options: ClipboardPluginOptions): Plugin {
             return true;
           }
 
+          const html = data.getData("text/html");
+          if (byteLength(html) > MAX_PASTE_HTML_BYTES) {
+            clipboardEvent.preventDefault();
+            notify(options, "html-too-large", "粘贴的 HTML 超过 2MB，已降级为纯文本");
+            view.pasteText(data.getData("text/plain"), clipboardEvent);
+            return true;
+          }
+
           const payload =
             decodeClipboardPayload(data.getData(CLIPBOARD_MIME)) ??
-            decodeClipboardPayloadFromHTML(data.getData("text/html"));
+            decodeClipboardPayloadFromHTML(html);
           if (payload && acceptsSchemaVersion(payload.schemaVersion)) {
             const slice = parseSlice(view.state.schema, payload.slice);
             if (slice) {
@@ -184,13 +199,19 @@ export function createClipboardPlugin(options: ClipboardPluginOptions): Plugin {
               return true;
             }
           }
-          if (data.files.length > 0 && options.handleFiles?.(view, data.files)) {
+          const files = acceptedFiles(data.files, options);
+          if (files.length > 0 && options.handleFiles?.(view, files)) {
             clipboardEvent.preventDefault();
             return true;
           }
-          const html = data.getData("text/html");
           if (html) {
             clipboardEvent.preventDefault();
+            if (containsFileImage(html)) {
+              notify(options, "word-file-image", "Word 图片无法读取，请手动插入图片");
+            }
+            if (containsOversizedTable(html)) {
+              notify(options, "table-limit", "表格最多包含 5000 个单元格，已降级为纯文本");
+            }
             const slice = parseExternalHTML(view.state.schema, html);
             if (slice.content.size > 0) {
               view.dispatch(
@@ -201,11 +222,182 @@ export function createClipboardPlugin(options: ClipboardPluginOptions): Plugin {
             }
             return true;
           }
+          const plain = data.getData("text/plain");
+          const tsv = parseTSVSlice(view.state.schema, plain);
+          if (tsv) {
+            clipboardEvent.preventDefault();
+            view.dispatch(
+              view.state.tr.replaceSelection(tsv).scrollIntoView().setMeta("paste", true),
+            );
+            return true;
+          }
+          if (plain.includes("\t") && hasTableSchema(view.state.schema)) {
+            clipboardEvent.preventDefault();
+            notify(options, "table-limit", "表格最多包含 5000 个单元格，已降级为纯文本");
+            view.pasteText(plain, clipboardEvent);
+            return true;
+          }
+          if (pastePlainURL(view, plain)) {
+            clipboardEvent.preventDefault();
+            return true;
+          }
           return false;
         },
       },
     },
   });
+}
+
+/** Excel 的 TSV 兜底解析器：RFC 4180 风格双引号可保护制表符和换行。 */
+export function parseTSV(input: string): string[][] | null {
+  if (!input.includes("\t")) {
+    return null;
+  }
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = "";
+  let quoted = false;
+  for (let index = 0; index < input.length; index += 1) {
+    const char = input[index];
+    if (char === '"') {
+      if (quoted && input[index + 1] === '"') {
+        cell += '"';
+        index += 1;
+      } else {
+        quoted = !quoted;
+      }
+      continue;
+    }
+    if (char === "\t" && !quoted) {
+      row.push(cell);
+      cell = "";
+      continue;
+    }
+    if ((char === "\n" || char === "\r") && !quoted) {
+      if (char === "\r" && input[index + 1] === "\n") {
+        index += 1;
+      }
+      row.push(cell);
+      rows.push(row);
+      row = [];
+      cell = "";
+      continue;
+    }
+    cell += char;
+  }
+  row.push(cell);
+  if (row.length > 1 || row[0] !== "" || rows.length === 0) {
+    rows.push(row);
+  }
+  return rows.length > 0 ? rows : null;
+}
+
+function parseTSVSlice(schema: Schema, input: string): Slice | null {
+  const rows = parseTSV(input);
+  if (!rows || !hasTableSchema(schema)) {
+    return null;
+  }
+  const columns = Math.max(...rows.map((row) => row.length));
+  if (rows.length * columns > 5000) {
+    return null;
+  }
+  const table = schema.nodes.co_table;
+  const tableRow = schema.nodes.co_table_row;
+  const tableCell = schema.nodes.co_table_cell;
+  const paragraph = schema.nodes.paragraph;
+  if (!table || !tableRow || !tableCell || !paragraph) {
+    return null;
+  }
+  try {
+    return new Slice(
+      Fragment.from(
+        table.createChecked(
+          null,
+          rows.map((row) =>
+            tableRow.createChecked(
+              null,
+              Array.from({ length: columns }, (_, index) => {
+                const text = row[index] ?? "";
+                return tableCell.createChecked(
+                  null,
+                  paragraph.createChecked(null, text ? schema.text(text) : undefined),
+                );
+              }),
+            ),
+          ),
+        ),
+      ),
+      0,
+      0,
+    );
+  } catch {
+    return null;
+  }
+}
+
+function pastePlainURL(view: EditorView, input: string): boolean {
+  const href = safeURL(input);
+  const link = view.state.schema.marks.co_link;
+  if (!href || !link) {
+    return false;
+  }
+  const mark = link.create({ href });
+  const { from, to, empty } = view.state.selection;
+  const transaction = empty
+    ? view.state.tr.insertText(input).addMark(from, from + input.length, mark)
+    : view.state.tr.addMark(from, to, mark);
+  view.dispatch(transaction.scrollIntoView().setMeta("paste", true));
+  return true;
+}
+
+function safeURL(value: string): string | null {
+  try {
+    const url = new URL(value);
+    return ["https:", "http:", "mailto:", "tel:"].includes(url.protocol) ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
+function acceptedFiles(files: FileList, options: ClipboardPluginOptions): FileList {
+  const accepted = Array.from(files).filter((file) => {
+    if (file.type.startsWith("image/") && file.size > MAX_IMAGE_BYTES) {
+      notify(options, "image-too-large", "图片超过 10MB，已忽略");
+      return false;
+    }
+    return true;
+  });
+  if (accepted.length > MAX_PASTE_FILES) {
+    notify(options, "file-limit", "一次最多粘贴 20 个文件，已忽略超出部分");
+  }
+  return Object.assign(accepted.slice(0, MAX_PASTE_FILES), {
+    item: (index: number) => accepted[index] ?? null,
+  }) as FileList;
+}
+
+function containsFileImage(html: string): boolean {
+  return /<img\b[^>]*\bsrc\s*=\s*["']file:/i.test(html);
+}
+
+function containsOversizedTable(html: string): boolean {
+  const tables = html.match(/<table\b[\s\S]*?<\/table\s*>/gi) ?? [];
+  return tables.some((table) => (table.match(/<(?:td|th)\b/gi) ?? []).length > 5000);
+}
+
+function notify(
+  options: ClipboardPluginOptions,
+  code: ClipboardNotice["code"],
+  message: string,
+): void {
+  options.onNotice?.({ code, message });
+}
+
+function byteLength(value: string): number {
+  return new TextEncoder().encode(value).byteLength;
+}
+
+function hasTableSchema(schema: Schema): boolean {
+  return Boolean(schema.nodes.co_table && schema.nodes.co_table_row && schema.nodes.co_table_cell);
 }
 
 function decodeClipboardPayloadFromHTML(html: string): ClipboardPayload | null {

@@ -1,10 +1,12 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import type { CoreMarkSpec, CoreNodeSpec } from "@kaelen/editor-shared-types";
 import { JSDOM } from "jsdom";
 import { Fragment, Slice } from "prosemirror-model";
 import { EditorState, TextSelection } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 import { describe, expect, it } from "vitest";
+import { createTablePlugin } from "../../editor-plugin-table/src/table-plugin";
 import {
   CLIPBOARD_MIME,
   createClipboardPlugin,
@@ -217,11 +219,253 @@ describe("内部 Slice 剪贴板协议", () => {
       view.destroy();
     });
   });
+
+  it("Word 的 file: 图片会丢弃并通过提示回调说明需手动插入", () => {
+    usingDOM((host) => {
+      const notices: string[] = [];
+      const plugin = createClipboardPlugin({
+        getPayloadMeta: () => ({ schemaVersion: 1, plugins: {} }),
+        onNotice: (notice) => notices.push(notice.message),
+      });
+      const doc = schema.node("doc", undefined, [paragraph("旧内容")]);
+      const view = new EditorView(host, {
+        state: EditorState.create({
+          schema,
+          doc,
+          selection: TextSelection.create(doc, 1, doc.content.size - 1),
+          plugins: [plugin],
+        }),
+      });
+      const data = new ClipboardDataStub();
+      data.setData("text/html", '<p>保留文字<img src="file:///C:/Users/Alice/a.png"></p>');
+      data.setData("text/plain", "保留文字");
+
+      expect(plugin.props.handleDOMEvents?.paste?.call(plugin, view, clipboardEvent(data))).toBe(
+        true,
+      );
+      expect(view.state.doc.textContent).toBe("保留文字");
+      expect(notices).toEqual(["Word 图片无法读取，请手动插入图片"]);
+      view.destroy();
+    });
+  });
+
+  it("Excel 没有 HTML 时按带引号转义的 TSV 还原表格单元格", () => {
+    usingDOM((host) => {
+      const tableSchema = schemaWithTable();
+      const plugin = createClipboardPlugin({
+        getPayloadMeta: () => ({ schemaVersion: 1, plugins: {} }),
+      });
+      const doc = tableSchema.node("doc", undefined, [tableSchema.node("paragraph")]);
+      const view = new EditorView(host, {
+        state: EditorState.create({
+          schema: tableSchema,
+          doc,
+          selection: TextSelection.create(doc, 1),
+          plugins: [plugin],
+        }),
+      });
+      const data = new ClipboardDataStub();
+      data.setData("text/plain", '姓名\t备注\r\n张三\t"含\t制表符和\n换行"');
+
+      expect(plugin.props.handleDOMEvents?.paste?.call(plugin, view, clipboardEvent(data))).toBe(
+        true,
+      );
+      expect(view.state.doc.toJSON()).toEqual({
+        type: "doc",
+        content: [
+          {
+            type: "co_table",
+            content: [
+              {
+                type: "co_table_row",
+                content: [
+                  {
+                    type: "co_table_cell",
+                    attrs: { colspan: 1, rowspan: 1, colwidth: null },
+                    content: [{ type: "paragraph", content: [{ type: "text", text: "姓名" }] }],
+                  },
+                  {
+                    type: "co_table_cell",
+                    attrs: { colspan: 1, rowspan: 1, colwidth: null },
+                    content: [{ type: "paragraph", content: [{ type: "text", text: "备注" }] }],
+                  },
+                ],
+              },
+              {
+                type: "co_table_row",
+                content: [
+                  {
+                    type: "co_table_cell",
+                    attrs: { colspan: 1, rowspan: 1, colwidth: null },
+                    content: [{ type: "paragraph", content: [{ type: "text", text: "张三" }] }],
+                  },
+                  {
+                    type: "co_table_cell",
+                    attrs: { colspan: 1, rowspan: 1, colwidth: null },
+                    content: [
+                      {
+                        type: "paragraph",
+                        content: [{ type: "text", text: "含\t制表符和\n换行" }],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      });
+      view.destroy();
+    });
+  });
+
+  it("纯文本 URL 在选区上应用链接，在空选区插入链接文本", () => {
+    usingDOM((host) => {
+      const linkSchema = buildSchema({
+        marks: {
+          co_link: {
+            attrs: { href: {} },
+            parseDOM: [{ tag: "a", attrsFromDOM: { href: "href" } }],
+            toDOM: () => ["a", 0],
+          },
+        },
+      });
+      const plugin = createClipboardPlugin({
+        getPayloadMeta: () => ({ schemaVersion: 1, plugins: {} }),
+      });
+      const doc = linkSchema.node("doc", undefined, [
+        linkSchema.node("paragraph", undefined, linkSchema.text("选择我")),
+      ]);
+      const view = new EditorView(host, {
+        state: EditorState.create({
+          schema: linkSchema,
+          doc,
+          selection: TextSelection.create(doc, 1, 4),
+          plugins: [plugin],
+        }),
+      });
+      const data = new ClipboardDataStub();
+      data.setData("text/plain", "https://example.com/path");
+
+      expect(plugin.props.handleDOMEvents?.paste?.call(plugin, view, clipboardEvent(data))).toBe(
+        true,
+      );
+      expect(view.state.doc.textContent).toBe("选择我");
+      expect(view.state.doc.firstChild?.firstChild?.marks).toEqual([
+        linkSchema.marks.co_link?.create({ href: "https://example.com/path" }),
+      ]);
+
+      view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, 4)));
+      expect(plugin.props.handleDOMEvents?.paste?.call(plugin, view, clipboardEvent(data))).toBe(
+        true,
+      );
+      expect(view.state.doc.toJSON()).toEqual({
+        type: "doc",
+        content: [
+          {
+            type: "paragraph",
+            content: [
+              {
+                type: "text",
+                marks: [{ type: "co_link", attrs: { href: "https://example.com/path" } }],
+                text: "选择我https://example.com/path",
+              },
+            ],
+          },
+        ],
+      });
+      view.destroy();
+    });
+  });
+
+  it("超出 HTML 和文件阈值会降级或截断，并通过提示回调告知用户", () => {
+    usingDOM((host) => {
+      const notices: string[] = [];
+      const received: FileList[] = [];
+      const plugin = createClipboardPlugin({
+        getPayloadMeta: () => ({ schemaVersion: 1, plugins: {} }),
+        onNotice: (notice) => notices.push(notice.message),
+        handleFiles: (_view, files) => {
+          received.push(files);
+          return true;
+        },
+      });
+      const doc = schema.node("doc", undefined, [paragraph("旧")]);
+      const view = new EditorView(host, {
+        state: EditorState.create({
+          schema,
+          doc,
+          selection: TextSelection.create(doc, 1, 2),
+          plugins: [plugin],
+        }),
+      });
+      const htmlData = new ClipboardDataStub();
+      htmlData.setData("text/html", `<p>${"x".repeat(2 * 1024 * 1024 + 1)}</p>`);
+      htmlData.setData("text/plain", "降级文本");
+      expect(
+        plugin.props.handleDOMEvents?.paste?.call(plugin, view, clipboardEvent(htmlData)),
+      ).toBe(true);
+      expect(view.state.doc.textContent).toBe("降级文本");
+
+      const files = Array.from(
+        { length: 21 },
+        (_, index) => new File(["image"], `${index}.png`, { type: "image/png" }),
+      );
+      const fileData = new ClipboardDataStub(files);
+      expect(
+        plugin.props.handleDOMEvents?.paste?.call(plugin, view, clipboardEvent(fileData)),
+      ).toBe(true);
+      expect(received).toHaveLength(1);
+      expect(received[0]).toHaveLength(20);
+      expect(notices).toEqual([
+        "粘贴的 HTML 超过 2MB，已降级为纯文本",
+        "一次最多粘贴 20 个文件，已忽略超出部分",
+      ]);
+      view.destroy();
+    });
+  });
+
+  it("超过 10MB 的单张图片会在交给上传插件前被拒绝", () => {
+    usingDOM((host) => {
+      const notices: string[] = [];
+      const handleFiles = vi.fn(() => true);
+      const plugin = createClipboardPlugin({
+        getPayloadMeta: () => ({ schemaVersion: 1, plugins: {} }),
+        handleFiles,
+        onNotice: (notice) => notices.push(notice.message),
+      });
+      const doc = schema.node("doc", undefined, [paragraph("旧")]);
+      const view = new EditorView(host, {
+        state: EditorState.create({
+          schema,
+          doc,
+          selection: TextSelection.create(doc, 1, 2),
+          plugins: [plugin],
+        }),
+      });
+      const data = new ClipboardDataStub([
+        new File([new Uint8Array(10 * 1024 * 1024 + 1)], "large.png", { type: "image/png" }),
+      ]);
+
+      expect(plugin.props.handleDOMEvents?.paste?.call(plugin, view, clipboardEvent(data))).toBe(
+        false,
+      );
+      expect(handleFiles).not.toHaveBeenCalled();
+      expect(notices).toEqual(["图片超过 10MB，已忽略"]);
+      view.destroy();
+    });
+  });
 });
 
 class ClipboardDataStub {
   private readonly values = new Map<string, string>();
-  readonly files = { length: 0 } as FileList;
+  readonly files: FileList;
+
+  constructor(files: readonly File[] = []) {
+    this.files = Object.assign([...files], {
+      item: (index: number) => files[index] ?? null,
+    }) as FileList;
+  }
 
   clearData(): void {
     this.values.clear();
@@ -234,6 +478,18 @@ class ClipboardDataStub {
   setData(type: string, value: string): void {
     this.values.set(type, value);
   }
+}
+
+function schemaWithTable() {
+  const plugin = createTablePlugin();
+  const nodes: Record<string, CoreNodeSpec> = {};
+  plugin.extendSchema?.({
+    addNode: (name, spec) => {
+      nodes[name] = spec;
+    },
+    addMark: (_name: string, _spec: CoreMarkSpec) => undefined,
+  });
+  return buildSchema({ nodes });
 }
 
 function clipboardEvent(data: ClipboardDataStub): ClipboardEvent {
