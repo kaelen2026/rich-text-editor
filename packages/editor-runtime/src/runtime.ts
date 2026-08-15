@@ -1,17 +1,25 @@
 import { buildSchema, coreCommands, EditorSession } from "@kaelen/editor-pm-adapter";
-import { createEmptyEnvelope, validateEnvelope } from "@kaelen/editor-schema";
+import {
+  assertMigrationsDeclareReversibility,
+  cloneJson,
+  createEmptyEnvelope,
+  migrateEnvelope,
+  validateEnvelope,
+} from "@kaelen/editor-schema";
 import type {
   CommandQuery,
   CommandResult,
+  DocumentMigration,
   EditorEnvelope,
   EditorEventName,
   EditorSnapshot,
   LoadResult,
+  NodeJSON,
 } from "@kaelen/editor-shared-types";
 import { collectPluginCapabilities, type EditorPlugin } from "./plugins";
 
 export interface Runtime {
-  loadDocument(envelope: EditorEnvelope): LoadResult;
+  loadDocument(input: EditorEnvelope | NodeJSON): LoadResult;
   getDocument(): EditorEnvelope;
   execute(command: string, input?: unknown): CommandResult;
   queryCommand(command: string): CommandQuery;
@@ -33,9 +41,13 @@ type EnvelopeMeta = Omit<EditorEnvelope, "doc">;
 
 export interface RuntimeOptions {
   plugins?: EditorPlugin[];
+  /** 文档结构迁移。后续由插件通过注册中心贡献（方案 §8.3）。 */
+  migrations?: DocumentMigration[];
 }
 
 export function createRuntime(options: RuntimeOptions = {}): Runtime {
+  const migrations = options.migrations ?? [];
+  assertMigrationsDeclareReversibility(migrations);
   const capabilities = collectPluginCapabilities(options.plugins ?? []);
   const schema = buildSchema({ nodes: capabilities.nodes, marks: capabilities.marks });
   const initial = createEmptyEnvelope();
@@ -70,16 +82,33 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
   });
 
   return {
-    loadDocument(envelope: EditorEnvelope): LoadResult {
+    loadDocument(input: EditorEnvelope | NodeJSON): LoadResult {
+      const migration = migrateEnvelope(input, migrations);
+      if (!migration.ok) {
+        return {
+          ok: false,
+          migrated: false,
+          degraded: false,
+          unknownNodes: [],
+          errors: migration.errors,
+        };
+      }
+      const envelope = migration.envelope;
       const errors = validateEnvelope(envelope);
       if (errors.length > 0) {
-        return { ok: false, degraded: false, unknownNodes: [], errors };
+        return { ok: false, migrated: false, degraded: false, unknownNodes: [], errors };
       }
       let unknownNodes: string[];
       try {
         unknownNodes = session.replaceDoc(envelope.doc);
       } catch (error) {
-        return { ok: false, degraded: false, unknownNodes: [], errors: [describe(error)] };
+        return {
+          ok: false,
+          migrated: false,
+          degraded: false,
+          unknownNodes: [],
+          errors: [describe(error)],
+        };
       }
       meta = toMeta(envelope);
       // 装载是初始化，不是用户编辑：修订号与脏标记归零。
@@ -89,11 +118,22 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       if (unknownNodes.length > 0) {
         emit("documentDegraded");
       }
-      return { ok: true, degraded: unknownNodes.length > 0, unknownNodes };
+      return {
+        ok: true,
+        migrated: migration.migrated,
+        degraded: unknownNodes.length > 0,
+        unknownNodes,
+      };
     },
 
     getDocument(): EditorEnvelope {
-      return { ...meta, doc: session.docJSON };
+      // 交出去的是快照：调用方改写返回值不得影响内部状态（方案 §9.3）。
+      return {
+        ...meta,
+        plugins: { ...meta.plugins },
+        annotations: cloneJson(meta.annotations),
+        doc: session.docJSON,
+      };
     },
 
     execute(command: string, input?: unknown): CommandResult {
@@ -193,7 +233,8 @@ function toMeta(envelope: EditorEnvelope): EnvelopeMeta {
     envelope: envelope.envelope,
     schemaVersion: envelope.schemaVersion,
     plugins: { ...envelope.plugins },
-    annotations: [...envelope.annotations],
+    // 深拷贝：批注对象与 payload 都是调用方的，浅拷数组挡不住后续改写。
+    annotations: cloneJson(envelope.annotations),
   };
 }
 
