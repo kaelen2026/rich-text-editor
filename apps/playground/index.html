@@ -6,7 +6,7 @@
     <title>富文本编辑器 · 块级结构与插件熔断</title>
     <style>
       :root {
-        color-scheme: light dark;
+        color-scheme: light;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
       }
       body {
@@ -46,18 +46,22 @@
       .toolbar button {
         font: inherit;
         padding: 4px 10px;
-        border: 1px solid currentColor;
+        border: 1px solid #4b5563;
         border-radius: 4px;
-        background: transparent;
-        color: inherit;
+        background: #ffffff;
+        color: #1f2937;
         cursor: pointer;
       }
       .toolbar button[data-active="true"] {
-        background: currentColor;
-        color: Canvas;
+        border-color: #0f4c81;
+        background: #0f4c81;
+        color: #ffffff;
       }
       .toolbar button:disabled {
-        opacity: 0.4;
+        opacity: 1;
+        border-color: #9ca3af;
+        background: #f3f4f6;
+        color: #4b5563;
         cursor: not-allowed;
       }
       .status {

@@ -63,6 +63,14 @@ describe("React 接入", () => {
     expect(screen.getByTestId("revision").textContent).toBe("0");
   });
 
+  it("在真实可聚焦的编辑元素上公开名称、角色与多行语义", () => {
+    renderEditor();
+
+    const content = screen.getByRole("textbox", { name: "富文本编辑器" });
+    expect(content.getAttribute("aria-multiline")).toBe("true");
+    expect(content.getAttribute("aria-disabled")).not.toBe("true");
+  });
+
   it("命令执行后工具栏生效态与修订号跟着更新", () => {
     renderEditor();
 

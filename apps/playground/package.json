@@ -15,8 +15,10 @@
     "@kaelen/editor-plugin-table": "workspace:*",
     "@kaelen/editor-pm-adapter": "workspace:*",
     "@kaelen/editor-react": "workspace:*",
+    "@kaelen/editor-react-ui": "workspace:*",
     "@kaelen/editor-schema": "workspace:*",
     "@kaelen/editor-shared-types": "workspace:*",
+    "@kaelen/editor-ui-model": "workspace:*",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },

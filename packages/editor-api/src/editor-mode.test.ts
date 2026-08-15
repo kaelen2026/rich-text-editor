@@ -83,11 +83,14 @@ describe("编辑器三态", () => {
     const surface = () => host.querySelector(".ProseMirror") as HTMLElement;
 
     expect(surface().getAttribute("contenteditable")).toBe("true");
+    expect(surface().getAttribute("role")).toBe("textbox");
+    expect(surface().getAttribute("aria-multiline")).toBe("true");
 
     editor.setMode("readonly");
     expect(surface().getAttribute("contenteditable")).toBe("false");
     expect(surface().getAttribute("tabindex")).toBe("0");
     expect(surface().getAttribute("aria-readonly")).toBe("true");
+    expect(surface().hasAttribute("aria-disabled")).toBe(false);
 
     editor.setMode("disabled");
     expect(surface().getAttribute("contenteditable")).toBe("false");

@@ -6,13 +6,14 @@ import { applyDocumentPatch, buildSchema } from "@kaelen/editor-pm-adapter";
 import {
   EditorContent,
   EditorProvider,
-  useCommandQuery,
   useEditor,
   useEditorSelector,
   usePluginErrors,
 } from "@kaelen/editor-react";
+import { EditorToolbar } from "@kaelen/editor-react-ui";
 import { createEmptyEnvelope, stringifyEnvelope } from "@kaelen/editor-schema";
 import type { DocumentPatch, EditorEnvelope, EditorMode } from "@kaelen/editor-shared-types";
+import type { ToolbarDefinition } from "@kaelen/editor-ui-model";
 import { useEffect, useRef, useState } from "react";
 
 const STORAGE_KEY = "playground.document";
@@ -76,6 +77,90 @@ const FAULTY_PLUGINS: InstalledPlugins = [
   { name: "ring-a", version: "0.0.1", namespace: "co_", dependsOn: ["ring-b"] },
   { name: "ring-b", version: "0.0.1", namespace: "co_", dependsOn: ["ring-a"] },
 ];
+
+const toolbarDefinition: ToolbarDefinition = {
+  label: "编辑工具栏",
+  groups: [
+    {
+      label: "块级格式",
+      items: [
+        { id: "paragraph", label: "正文", command: "block.setParagraph", shortcut: "Mod-Alt-0" },
+        ...[1, 2, 3, 4].map((level) => ({
+          id: `heading-${level}`,
+          label: `H${level}`,
+          command: "block.setHeading",
+          input: { level },
+          shortcut: `Mod-Alt-${level}`,
+        })),
+        { id: "quote", label: "引用", command: "block.toggleBlockquote", shortcut: "Mod-Shift->" },
+        {
+          id: "code-block",
+          label: "代码块",
+          command: "block.toggleCodeBlock",
+          shortcut: "Mod-Alt-C",
+        },
+        {
+          id: "rule",
+          label: "分隔线",
+          command: "block.insertHorizontalRule",
+          shortcut: "Mod-Alt-R",
+        },
+      ],
+    },
+    {
+      label: "列表",
+      items: [
+        {
+          id: "bullet-list",
+          label: "• 列表",
+          command: "list.toggleBullet",
+          shortcut: "Mod-Shift-8",
+        },
+        {
+          id: "ordered-list",
+          label: "1. 列表",
+          command: "list.toggleOrdered",
+          shortcut: "Mod-Shift-9",
+        },
+        { id: "task-list", label: "☐ 待办", command: "list.toggleTask", shortcut: "Mod-Shift-7" },
+        { id: "checked", label: "勾选", command: "list.toggleChecked" },
+        { id: "indent", label: "缩进", command: "list.indent", shortcut: "Tab" },
+        { id: "outdent", label: "提升", command: "list.outdent", shortcut: "Shift-Tab" },
+      ],
+    },
+    {
+      label: "行内格式与历史",
+      items: [
+        { id: "bold", label: "加粗", command: "format.bold", shortcut: "Mod-B" },
+        { id: "italic", label: "斜体", command: "format.italic", shortcut: "Mod-I" },
+        { id: "underline", label: "下划线", command: "format.underline", shortcut: "Mod-U" },
+        { id: "strike", label: "删除线", command: "format.strikethrough", shortcut: "Mod-Shift-X" },
+        { id: "inline-code", label: "行内代码", command: "format.code", shortcut: "Mod-E" },
+        { id: "link", label: "链接", command: "link.set" },
+        { id: "unlink", label: "取消链接", command: "link.unset" },
+        { id: "image", label: "图片", command: "image.insert", alwaysEnabled: true },
+        { id: "undo", label: "撤销", command: "history.undo", shortcut: "Mod-Z" },
+        { id: "redo", label: "重做", command: "history.redo", shortcut: "Mod-Shift-Z" },
+      ],
+    },
+    {
+      label: "表格",
+      items: [
+        {
+          id: "insert-table",
+          label: "插入 3×3 表格",
+          command: "table.insert",
+          input: { rows: 3, cols: 3, withHeaderRow: true },
+        },
+        { id: "add-row", label: "加行", command: "table.addRowAfter" },
+        { id: "add-column", label: "加列", command: "table.addColumnAfter" },
+        { id: "merge-cells", label: "合并单元格", command: "table.mergeCells" },
+        { id: "split-cell", label: "拆分单元格", command: "table.splitCell" },
+        { id: "delete-table", label: "删除表格", command: "table.delete" },
+      ],
+    },
+  ],
+};
 
 /** 模拟一份由"已安装表格与提及插件"的环境写出的文档。 */
 const UNKNOWN_SAMPLE: EditorEnvelope = {
@@ -152,36 +237,6 @@ function bootEditor(faulty: boolean, document: EditorEnvelope): Boot {
   return { editor, unknownNodes: result.unknownNodes, faulty, baseDocument: document };
 }
 
-function CommandButton({
-  command,
-  label,
-  input,
-  title,
-}: {
-  command: string;
-  label: string;
-  input?: unknown;
-  title?: string;
-}) {
-  const editor = useEditor();
-  const { enabled, active } = useCommandQuery(command, input);
-  return (
-    <button
-      type="button"
-      title={title}
-      data-active={active}
-      disabled={!enabled}
-      onMouseDown={(event) => {
-        // 保住选区：按下时不让焦点离开编辑区。
-        event.preventDefault();
-        editor.execute(command, input);
-      }}
-    >
-      {label}
-    </button>
-  );
-}
-
 function ModeSwitch() {
   const editor = useEditor();
   const mode = useEditorSelector((snapshot) => snapshot.mode);
@@ -232,74 +287,39 @@ function Toolbar({
 
   return (
     <>
-      <div className="toolbar">
-        <CommandButton command="block.setParagraph" label="正文" title="Cmd/Ctrl+Alt+0" />
-        {[1, 2, 3, 4].map((level) => (
-          <CommandButton
-            key={level}
-            command="block.setHeading"
-            input={{ level }}
-            label={`H${level}`}
-            title={`Cmd/Ctrl+Alt+${level}`}
-          />
-        ))}
-        <CommandButton command="block.toggleBlockquote" label="引用" title="Cmd/Ctrl+Shift+>" />
-        <CommandButton command="block.toggleCodeBlock" label="代码块" title="Cmd/Ctrl+Alt+C" />
-        <CommandButton command="block.insertHorizontalRule" label="分隔线" title="Cmd/Ctrl+Alt+R" />
-      </div>
-      <div className="toolbar">
-        <CommandButton command="list.toggleBullet" label="• 列表" title="Cmd/Ctrl+Shift+8" />
-        <CommandButton command="list.toggleOrdered" label="1. 列表" title="Cmd/Ctrl+Shift+9" />
-        <CommandButton command="list.toggleTask" label="☐ 待办" title="Cmd/Ctrl+Shift+7" />
-        <CommandButton command="list.toggleChecked" label="勾选" />
-        <CommandButton command="list.indent" label="缩进" title="Tab" />
-        <CommandButton command="list.outdent" label="提升" title="Shift+Tab" />
-      </div>
-      <div className="toolbar">
-        <CommandButton command="format.bold" label="B" title="Cmd/Ctrl+B" />
-        <CommandButton command="format.italic" label="I" title="Cmd/Ctrl+I" />
-        <CommandButton command="format.underline" label="U" title="Cmd/Ctrl+U" />
-        <CommandButton command="format.strikethrough" label="S" title="Cmd/Ctrl+Shift+X" />
-        <CommandButton command="format.code" label="<>" title="Cmd/Ctrl+E" />
-        <LinkButton />
-        <CommandButton command="link.unset" label="取消链接" />
-        <button
-          type="button"
-          onMouseDown={(event) => {
-            event.preventDefault();
-            imageInput.current?.click();
-          }}
-        >
-          图片
-        </button>
-        <input
-          ref={imageInput}
-          type="file"
-          accept="image/*"
-          hidden
-          onChange={(event) => {
-            const file = event.currentTarget.files?.[0];
-            if (file) {
-              editor.execute("image.insert", { file });
+      <EditorToolbar
+        className="toolbar"
+        definition={toolbarDefinition}
+        onExecute={(item) => {
+          if (item.id === "link") {
+            const href = window.prompt("链接地址（仅 https/http/mailto/tel）", "https://");
+            if (href) {
+              editor.execute("link.set", { href });
             }
-            event.currentTarget.value = "";
-          }}
-        />
-        <CommandButton command="history.undo" label="撤销" title="Cmd/Ctrl+Z" />
-        <CommandButton command="history.redo" label="重做" title="Cmd/Ctrl+Shift+Z" />
-      </div>
-      <div className="toolbar">
-        <CommandButton
-          command="table.insert"
-          input={{ rows: 2, cols: 2, withHeaderRow: true }}
-          label="插入表格"
-        />
-        <CommandButton command="table.addRowAfter" label="加行" />
-        <CommandButton command="table.addColumnAfter" label="加列" />
-        <CommandButton command="table.mergeCells" label="合并单元格" />
-        <CommandButton command="table.splitCell" label="拆分单元格" />
-        <CommandButton command="table.delete" label="删除表格" />
-      </div>
+            return true;
+          }
+          if (item.id === "image") {
+            imageInput.current?.click();
+            return true;
+          }
+        }}
+      />
+      <input
+        ref={imageInput}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={(event) => {
+          const file = event.currentTarget.files?.[0];
+          if (file) {
+            const alt = window.prompt("图片替代文本", file.name);
+            if (alt !== null) {
+              editor.execute("image.insert", { file, alt });
+            }
+          }
+          event.currentTarget.value = "";
+        }}
+      />
       <div className="toolbar">
         <ModeSwitch />
         <button type="button" onClick={onSave}>
@@ -319,28 +339,6 @@ function Toolbar({
         </span>
       </div>
     </>
-  );
-}
-
-function LinkButton() {
-  const editor = useEditor();
-  const { enabled, active } = useCommandQuery("link.set");
-
-  return (
-    <button
-      type="button"
-      data-active={active}
-      disabled={!enabled}
-      onMouseDown={(event) => {
-        event.preventDefault();
-        const href = window.prompt("链接地址（仅 https/http/mailto/tel）", "https://");
-        if (href) {
-          editor.execute("link.set", { href });
-        }
-      }}
-    >
-      链接
-    </button>
   );
 }
 
@@ -425,33 +423,35 @@ export function App() {
 
   return (
     <EditorProvider editor={editor}>
-      <h1>富文本编辑器 · 输入规则、图片上传、组合态与插件熔断</h1>
-      <p className="hint">
-        {
-          "标题、引用、列表、待办、代码块、分隔线都在工具栏上，按钮的 tooltip 是对应快捷键；列表里 Tab / Shift+Tab 升降级，Shift+Enter 软换行。点“图片”选择本地文件，或把图片拖入/粘贴到编辑区：上传中会显示占位，完成后回填；上传期间继续编辑，目标位置会随事务迁移。复制上传中图片不会复制运行时 uploadId。输入 #、-、1.、> 或 ``` 加空格可触发结构规则；中文/日文等输入法组合期间工具栏会暂停，并在候选词确认后恢复。复制会把可还原的 Slice 写入 HTML 的 data-co-slice，粘贴时优先恢复它；Cmd/Ctrl+Shift+V 与代码块内粘贴始终只取纯文本。切换状态可以看只读态与禁用态的区别；点保存写入 localStorage，刷新页面内容仍在。"
-        }
-      </p>
-      <label className="switch">
-        <input
-          type="checkbox"
-          checked={faulty}
-          onChange={(event) => toggleFault(event.target.checked)}
-        />
-        注入故障插件（重名、缺依赖、循环依赖、覆盖核心命令、命令抛错）
-      </label>
-      <DegradedBanner />
-      {unknownNodes.length > 0 ? (
-        <p className="warning">
-          部分内容以只读形式显示，需要这些功能才能编辑：{unknownNodes.join("、")}
-          。保存时这些内容会原样写回，不会丢失。
+      <main>
+        <h1>富文本编辑器 · 输入规则、图片上传、组合态与插件熔断</h1>
+        <p className="hint">
+          {
+            "标题、引用、列表、待办、代码块、分隔线都在工具栏上，按钮的 tooltip 是对应快捷键；列表里 Tab / Shift+Tab 升降级，Shift+Enter 软换行。点“图片”选择本地文件，或把图片拖入/粘贴到编辑区：上传中会显示占位，完成后回填；上传期间继续编辑，目标位置会随事务迁移。复制上传中图片不会复制运行时 uploadId。输入 #、-、1.、> 或 ``` 加空格可触发结构规则；中文/日文等输入法组合期间工具栏会暂停，并在候选词确认后恢复。复制会把可还原的 Slice 写入 HTML 的 data-co-slice，粘贴时优先恢复它；Cmd/Ctrl+Shift+V 与代码块内粘贴始终只取纯文本。切换状态可以看只读态与禁用态的区别；点保存写入 localStorage，刷新页面内容仍在。"
+          }
         </p>
-      ) : null}
-      <Toolbar onSave={save} onLoadSample={loadSample} faulty={faulty} />
-      <div className="surface">
-        <EditorContent />
-      </div>
-      <PatchPanel baseDocument={baseDocument} />
-      {saved ? <pre>{saved}</pre> : null}
+        <label className="switch">
+          <input
+            type="checkbox"
+            checked={faulty}
+            onChange={(event) => toggleFault(event.target.checked)}
+          />
+          注入故障插件（重名、缺依赖、循环依赖、覆盖核心命令、命令抛错）
+        </label>
+        <DegradedBanner />
+        {unknownNodes.length > 0 ? (
+          <p className="warning">
+            部分内容以只读形式显示，需要这些功能才能编辑：{unknownNodes.join("、")}
+            。保存时这些内容会原样写回，不会丢失。
+          </p>
+        ) : null}
+        <Toolbar onSave={save} onLoadSample={loadSample} faulty={faulty} />
+        <div className="surface">
+          <EditorContent />
+        </div>
+        <PatchPanel baseDocument={baseDocument} />
+        {saved ? <pre>{saved}</pre> : null}
+      </main>
     </EditorProvider>
   );
 }
