@@ -127,6 +127,12 @@ importers:
         specifier: ^7.3.6
         version: 7.3.6(@types/node@26.2.0)(jiti@2.6.1)(tsx@4.23.12)(yaml@2.9.0)
 
+  apps/remote-image-service:
+    dependencies:
+      '@kaelen/editor-remote-image-service':
+        specifier: workspace:*
+        version: link:../../packages/editor-remote-image-service
+
   packages/editor-api:
     dependencies:
       '@kaelen/editor-runtime':
@@ -270,6 +276,8 @@ importers:
       react:
         specifier: ^19.2.0
         version: 19.2.8
+
+  packages/editor-remote-image-service: {}
 
   packages/editor-runtime:
     dependencies:
