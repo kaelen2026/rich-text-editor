@@ -193,26 +193,22 @@ packages/
 
 ### 8.1 业务编辑器接口
 
+当前已实现的业务接口如下：
+
 ```ts
 export interface RichEditor {
   // ---- 文档读写 ----
-  /** 返回当前文档的信封 JSON。同一编辑器状态下多次调用返回同一引用（按事务缓存）。 */
+  /** 返回当前只读信封快照；同一状态下多次调用返回同一引用。 */
   getDocument(): EditorEnvelope
   /** 初始化装载：清空历史，不产生可撤销记录，不触发 contentChanged 的用户变更语义。 */
-  loadDocument(envelope: EditorEnvelope): LoadResult
-  /** 可撤销的整篇替换。协同场景下须由平台侧显式允许。 */
-  replaceDocument(envelope: EditorEnvelope): CommandResult
+  loadDocument(input: EditorEnvelope | NodeJSON): LoadResult
   /** 从 JSON 渲染 HTML（与服务端同一实现）。 */
   getHTML(): string
-  /** 解析外部 HTML 为文档；走与粘贴相同的 Schema 白名单管线。 */
-  parseHTML(html: string): ParseResult
 
   // ---- 命令 ----
-  execute(command: EditorCommand, payload?: unknown): CommandResult
-  /** 工具栏所需的完整状态：能否执行、当前是否生效、当前取值。 */
-  queryCommand(command: EditorCommand, payload?: unknown): CommandQuery
-  /** 把多个命令合并为一个撤销单元与一个 contentChanged 事件。 */
-  batch(fn: () => void): CommandResult
+  execute(command: string, input?: unknown): CommandResult
+  /** 工具栏所需状态：能否执行、当前是否生效。 */
+  queryCommand(command: string, input?: unknown): CommandQuery
 
   // ---- 选区与状态 ----
   getSelectionState(): SelectionSnapshot
@@ -238,16 +234,14 @@ export interface RichEditor {
 export interface CommandResult {
   ok: boolean
   /** 失败原因可判别，便于线上定位。 */
-  reason?: 'disabled' | 'invalid-payload' | 'plugin-error' | 'readonly' | 'composing' | 'limit-exceeded'
+  reason?: 'disabled' | 'destroyed' | 'invalid' | 'pluginError' | 'composing'
   detail?: unknown
 }
 
 export interface CommandQuery {
   enabled: boolean
-  /** 选区当前是否处于该命令的生效状态（加粗、标题层级等）。 */
+  /** 选区当前是否整体处于该命令的生效状态。 */
   active: boolean
-  /** 有取值的命令返回当前值，如 heading level、单元格背景。 */
-  value?: unknown
 }
 
 export interface SelectionSnapshot {
@@ -260,12 +254,13 @@ export interface SelectionSnapshot {
 }
 ```
 
+`replaceDocument`、`parseHTML`、`batch` 与命令返回 `value` 是后续候选扩展，当前未公开；业务接入不得依赖它们。
+
 设计要点：
 
-- `getDocument()` 必须按事务缓存。它是普通 JSON（因 §7.1 不暴露 `Node`），每次调用都是一次全文序列化；自动保存、脏标记、字数统计若直接高频调用会在大文档上掉帧。频繁保存改走 §8.4 的增量 patch。
+- `getDocument()` 按状态缓存。它是 JSON 兼容的只读快照（因 §7.1 不暴露 `Node`），调用方必须自行克隆后再改写；频繁保存改走 §8.4 的增量 patch。
 - `getSnapshot()` 的返回值必须引用稳定（同一状态返回同一对象）。React 18 的 `useSyncExternalStore` 要求 `getSnapshot` 可缓存，每次返回新对象会直接抛 `The result of getSnapshot should be cached`。
-- `queryCommand` 的存在是为了让工具栏不必调用 `getDocument()`。缺少 `active`/`value` 会迫使 UI 每次 `selectionChanged` 全量序列化文档。
-- `batch()` 的存在是为了让"插入表格 + 填充三行 + 定位光标"成为一次撤销，而不是四次。
+- `queryCommand` 的存在是为了让工具栏不必调用 `getDocument()`。缺少 `active` 会迫使 UI 每次 `selectionChanged` 全量序列化文档。
 
 ### 8.2 生命周期规则
 
@@ -448,7 +443,7 @@ unknown_inline: { group: 'inline', inline: true, atom: true, attrs: { original: 
 
 规则：
 
-1. 加载时遇到 Schema 中不存在的节点名 → 包装为 `unknown_block` / `unknown_inline`，`attrs.original` **原样保存该节点完整 JSON**（含子树）。该 JSON 必须以**深拷贝**存入、并在取回时深拷贝返回：调用方之后修改自己传入的对象，或修改 `getDocument()` 的返回值，都不得影响编辑器状态（反之亦然）。"原样保存"的强度等于这份快照的隔离度。
+1. 加载时遇到 Schema 中不存在的节点名 → 包装为 `unknown_block` / `unknown_inline`，`attrs.original` **原样保存该节点完整 JSON**（含子树）。该 JSON 必须以深拷贝存入；`getDocument()` 以只读快照交出，调用方之后修改自己传入的对象或尝试改写快照，都不得影响编辑器状态。"原样保存"的强度等于这份快照的隔离度。
 2. 渲染为只读占位，可整体选中、复制、删除，不可内部编辑。
 3. 保存时**原样写回原始 JSON**，`plugins` 版本号一并保留，不因途经一次编辑而降级。
 4. 若同一会话中稍后安装了对应插件，重新加载即恢复为正常节点。
@@ -728,7 +723,7 @@ clipboardData.setData('application/x-company-editor+json', JSON.stringify(payloa
 
 ## 14. 性能预算与规模上限
 
-没有数字的性能要求不可证伪，等于风险未被缓解。以下为初始基线，需在拿到真实业务样本后校准。
+没有数字的性能要求不可证伪，等于风险未被缓解。当前门禁使用的是初始阈值，不是已采集的 CI 历史基线；拿到真实业务样本和连续 CI 数据后必须校准。
 
 ### 14.1 基准与预算
 
@@ -736,13 +731,13 @@ clipboardData.setData('application/x-company-editor+json', JSON.stringify(payloa
 
 | 指标 | 预算 |
 | --- | --- |
-| 首次可编辑（从 `loadDocument` 到可输入） | < 500ms |
-| 按键到重绘 p95 | < 16ms |
-| 粘贴 1 万字 HTML | < 1s |
-| 工具栏状态更新（selectionChanged → 渲染） | < 8ms |
-| 编辑器实例内存增量 | < 300MB |
+| 编辑器挂载（`loadDocument` 到 `mount` 完成） | < 1200ms |
+| 格式化后的 DOM 状态更新 p95（jsdom） | < 240ms |
+| 解析 1 万字 HTML（jsdom） | < 1200ms |
+| 工具栏状态更新 | < 96ms |
+| 装载、读 JSON 与渲染 HTML 的堆内存增量 | < 96MB |
 
-手段：事务节流、`Decoration` 增量计算、NodeView 懒挂载、细粒度框架订阅（§10.2）、`getDocument()` 按事务缓存、字数统计增量维护。
+已交付的手段是细粒度框架订阅（§10.2）与 `getDocument()` 状态缓存。字数统计增量维护、真实浏览器重绘测量及 NodeView 懒挂载在相应能力引入时补齐，不能被本门禁视为已验证。
 
 ### 14.2 硬上限
 
@@ -775,7 +770,9 @@ clipboardData.setData('application/x-company-editor+json', JSON.stringify(payloa
 
 ### 16.1 功能验收
 
-- React（M1）/ Vue（M2）均可加载同一份信封 JSON 文档，并编辑、保存、重新打开。
+以下是目标版本验收项；当前完成状态以 `docs/implementation-slices.md` 的“当前交付状态”为准。
+
+- React 可加载同一份信封 JSON 文档，并编辑、保存、重新打开；Vue 对等验收在 S18 的接入方与时间确定后执行。
 - 基础格式、列表、表格、图片、链接支持撤销重做。
 - 编辑器内部复制粘贴不丢失支持范围内的结构和语义，**包括跨列表项一半、跨表格部分单元格、跨段落中部的选区**。
 - 从 Word、网页、Excel 粘贴时保留约定语义，且不引入多余页面样式（以 §16.5 golden diff 判定）。
@@ -806,7 +803,7 @@ clipboardData.setData('application/x-company-editor+json', JSON.stringify(payloa
   - 组合态中收到异步/程序化事务（模拟上传回填）不打断组合；
   - 组合态中 Decoration 更新被冻结。
 - 智能标点默认关闭，中文引号不被改写。
-- 字数统计对 CJK、emoji、组合字符计数正确。
+- 字数统计对 CJK、emoji、组合字符计数正确（待公开字数统计能力落地后验收）。
 
 ### 16.5 工程验收
 
