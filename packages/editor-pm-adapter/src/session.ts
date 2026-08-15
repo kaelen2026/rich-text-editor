@@ -9,6 +9,15 @@ import { restoreDoc, sanitizeDoc } from "./unknown";
 /** 状态变化通知。`docChanged` 区分内容变更与仅选区变更。 */
 export type SessionChangeListener = (docChanged: boolean) => void;
 
+/** 受保护调用的结果。失败时状态已回滚，`error` 原样交给调用方上报。 */
+export type ProtectedOutcome<TValue> = { ok: true; value: TValue } | { ok: false; error: unknown };
+
+/** 文档中的选区位置。位置语义与 `DocumentPatch` 一致：文档扁平偏移量。 */
+export interface SelectionRange {
+  anchor: number;
+  head: number;
+}
+
 /**
  * 拥有 ProseMirror 状态的会话。ProseMirror 类型不越过这个边界向上层泄漏，
  * 上层只看到 `NodeJSON` 等平台自有类型（方案 §7.1）。
@@ -73,6 +82,36 @@ export class EditorSession {
         return attributes;
       },
     };
+  }
+
+  get selection(): SelectionRange {
+    const { anchor, head } = this.state.selection;
+    return { anchor, head };
+  }
+
+  /**
+   * 在可回滚检查点上运行一段可能抛错的代码（插件命令、NodeView、剪贴板规则）。
+   *
+   * 抛错时状态整体回到调用前——因为 `EditorState` 是不可变值，检查点就是当前状态
+   * 本身，回滚是 O(1) 且连选区与撤销历史一起复原，比"用最后一次已知良好文档重建
+   * EditorView"（方案 §8.6）更完整：那种重建会清空历史，选区也只能尽力而为。
+   * 需要真正重建视图的场景（NodeView 让 DOM 与模型失同步）随 NodeView 切片再补。
+   */
+  runProtected<TValue>(run: () => TValue): ProtectedOutcome<TValue> {
+    const checkpoint = this.state;
+    try {
+      return { ok: true, value: run() };
+    } catch (error) {
+      if (this.state === checkpoint) {
+        return { ok: false, error };
+      }
+      const docChanged = this.state.doc !== checkpoint.doc;
+      this.state = checkpoint;
+      this.view?.updateState(checkpoint);
+      // 插件的事务已经通知过一次，回滚必须再通知一次，否则 UI 停在被回滚的内容上。
+      this.onChange(docChanged);
+      return { ok: false, error };
+    }
   }
 
   /**

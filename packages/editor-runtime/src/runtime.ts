@@ -1,9 +1,4 @@
-import {
-  buildSchema,
-  coreCommands,
-  EditorSession,
-  type SessionCommand,
-} from "@kaelen/editor-pm-adapter";
+import { buildSchema, EditorSession, type SessionCommand } from "@kaelen/editor-pm-adapter";
 import {
   assertMigrationsDeclareReversibility,
   cloneJson,
@@ -17,12 +12,15 @@ import type {
   DocumentMigration,
   EditorEnvelope,
   EditorEventName,
+  EditorEventPayload,
   EditorMode,
   EditorSnapshot,
   LoadResult,
   NodeJSON,
+  PluginError,
 } from "@kaelen/editor-shared-types";
-import { collectPluginCapabilities, type EditorPlugin } from "./plugins";
+import { PluginBreaker } from "./breaker";
+import { describeError, type EditorPlugin, resolvePlugins } from "./plugins";
 
 export interface Runtime {
   loadDocument(input: EditorEnvelope | NodeJSON): LoadResult;
@@ -32,7 +30,15 @@ export interface Runtime {
   getMode(): EditorMode;
   setMode(mode: EditorMode): void;
   getSnapshot(): EditorSnapshot;
-  subscribe(event: EditorEventName, listener: () => void): () => void;
+  subscribe<TEvent extends EditorEventName>(
+    event: TEvent,
+    listener: (payload: EditorEventPayload[TEvent]) => void,
+  ): () => void;
+  /**
+   * 至今为止的全部插件降级记录，含启动期冲突——它们发生在宿主能订阅之前。
+   * 没有新记录时返回同一个引用，可直接喂给 `useSyncExternalStore`。
+   */
+  getPluginErrors(): readonly PluginError[];
   isDirty(): boolean;
   markSaved(): void;
   getRevision(): number;
@@ -55,14 +61,17 @@ export interface RuntimeOptions {
   mode?: EditorMode;
 }
 
+/** 事件载荷在订阅处收敛为具体类型，这里只需要一个能装下所有监听器的形状。 */
+type AnyListener = (payload: never) => void;
+
 export function createRuntime(options: RuntimeOptions = {}): Runtime {
   const migrations = options.migrations ?? [];
   assertMigrationsDeclareReversibility(migrations);
-  const installedPlugins = options.plugins ?? [];
-  const capabilities = collectPluginCapabilities(installedPlugins);
-  const schema = buildSchema({ nodes: capabilities.nodes, marks: capabilities.marks });
+  const resolution = resolvePlugins(options.plugins ?? []);
+  const schema = buildSchema({ nodes: resolution.nodes, marks: resolution.marks });
   const initial = createEmptyEnvelope();
-  const commands = new Map([...Object.entries(coreCommands), ...capabilities.commands]);
+  const commands = resolution.commands;
+  const breaker = new PluginBreaker();
 
   let meta = toMeta(initial);
   let revision = 0;
@@ -70,18 +79,43 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
   let dirty = false;
   let destroyed = false;
   let snapshot: EditorSnapshot | null = null;
-  const listeners = new Map<EditorEventName, Set<() => void>>();
+  // 启动期的冲突发生在宿主订阅之前，只能靠 getPluginErrors 取回。
+  let pluginErrors: readonly PluginError[] = Object.freeze([...resolution.errors]);
+  const listeners = new Map<EditorEventName, Set<AnyListener>>();
 
-  function emit(event: EditorEventName): void {
+  function emit<TEvent extends EditorEventName>(
+    event: TEvent,
+    payload: EditorEventPayload[TEvent],
+  ): void {
     for (const listener of listeners.get(event) ?? []) {
-      listener();
+      (listener as (value: EditorEventPayload[TEvent]) => void)(payload);
     }
   }
 
   function invalidate(): void {
     stateRevision += 1;
     snapshot = null;
-    emit("change");
+    emit("change", undefined);
+  }
+
+  /**
+   * 插件入口点抛错后的统一收口：状态已由 `runProtected` 回滚到出错前，
+   * 这里只负责计数、上报与（达到阈值时）停用（方案 §8.6）。
+   */
+  function recordPluginFailure(plugin: string, error: unknown): PluginError {
+    const tripped = breaker.record(plugin, Date.now());
+    const pluginError: PluginError = {
+      plugin,
+      kind: "runtimeError",
+      disabled: true,
+      tripped,
+      message: tripped
+        ? `插件 ${plugin} 反复出错已停用，内容已保留：${describeError(error)}`
+        : `插件 ${plugin} 出错，内容已回到出错前的状态：${describeError(error)}`,
+    };
+    pluginErrors = Object.freeze([...pluginErrors, pluginError]);
+    emit("pluginError", pluginError);
+    return pluginError;
   }
 
   const session = new EditorSession(
@@ -147,13 +181,14 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
           degraded: false,
           unknownNodes: [],
           unknownMarks: [],
-          errors: [describe(error)],
+          errors: [describeError(error)],
         };
       }
       meta = toMeta(envelope);
       // 记录本环境安装了哪些插件，供缺插件的环境判断需要什么才能完整编辑。
+      // 只记真正启用的：被降级的插件没有注册 Schema，它的内容走的是未知节点兜底。
       // 已记录的版本不覆盖：文档自己的记录由该插件的迁移函数推进。
-      for (const plugin of installedPlugins) {
+      for (const plugin of resolution.enabled) {
         meta.plugins[plugin.name] ??= plugin.structureVersion ?? 1;
       }
       // 装载是初始化，不是用户编辑：修订号与脏标记归零。
@@ -162,7 +197,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       invalidate();
       const degraded = degradation.unknownNodes.length > 0 || degradation.unknownMarks.length > 0;
       if (degraded) {
-        emit("documentDegraded");
+        emit("documentDegraded", undefined);
       }
       return {
         ok: true,
@@ -187,27 +222,62 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       if (destroyed) {
         return { ok: false, reason: "destroyed" };
       }
-      const spec = commands.get(command);
-      if (!spec) {
+      const entry = commands.get(command);
+      if (!entry) {
         return { ok: false, reason: "disabled", detail: `未注册的命令：${command}` };
       }
-      return modeRejection(spec) ?? spec.run(session, true, input);
+      const spec = entry.command;
+      const rejection = modeRejection(spec);
+      if (rejection) {
+        return rejection;
+      }
+      // 核心命令不包裹：核心抛错是平台缺陷，掩盖它只会让问题更难查。
+      if (entry.owner === undefined) {
+        return spec.run(session, true, input);
+      }
+      if (breaker.isTripped(entry.owner)) {
+        return { ok: false, reason: "disabled", detail: `插件 ${entry.owner} 已停用` };
+      }
+      const outcome = session.runProtected(() => spec.run(session, true, input));
+      if (outcome.ok) {
+        return outcome.value;
+      }
+      return {
+        ok: false,
+        reason: "pluginError",
+        detail: recordPluginFailure(entry.owner, outcome.error),
+      };
     },
 
     queryCommand(command: string, input?: unknown): CommandQuery {
-      const spec = commands.get(command);
-      if (destroyed || !spec) {
+      const entry = commands.get(command);
+      if (destroyed || !entry) {
         return { enabled: false, active: false };
       }
-      // 生效态与可用性分开：只读态下加粗按钮不可点，但仍要显示选区是不是粗体。
-      const active = spec.active(session, input);
-      if (modeRejection(spec)) {
-        return { enabled: false, active };
-      }
-      return {
-        enabled: spec.enabled?.(session, input) ?? spec.run(session, false, input).ok,
-        active,
+      const spec = entry.command;
+      const query = (): CommandQuery => {
+        const active = spec.active(session, input);
+        if (modeRejection(spec)) {
+          return { enabled: false, active };
+        }
+        return {
+          enabled: spec.enabled?.(session, input) ?? spec.run(session, false, input).ok,
+          active,
+        };
       };
+      if (entry.owner === undefined) {
+        return query();
+      }
+      if (breaker.isTripped(entry.owner)) {
+        return { enabled: false, active: false };
+      }
+      // 状态查询每次渲染都会跑，插件在这里抛错会直接掀掉整个工具栏。
+      const outcome = session.runProtected(query);
+      if (outcome.ok) {
+        return outcome.value;
+      }
+      recordPluginFailure(entry.owner, outcome.error);
+      return { enabled: false, active: false };
     },
 
     getMode(): EditorMode {
@@ -235,13 +305,20 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       return snapshot;
     },
 
-    subscribe(event: EditorEventName, listener: () => void): () => void {
-      const bucket = listeners.get(event) ?? new Set<() => void>();
-      bucket.add(listener);
+    subscribe<TEvent extends EditorEventName>(
+      event: TEvent,
+      listener: (payload: EditorEventPayload[TEvent]) => void,
+    ): () => void {
+      const bucket = listeners.get(event) ?? new Set<AnyListener>();
+      bucket.add(listener as AnyListener);
       listeners.set(event, bucket);
       return () => {
-        bucket.delete(listener);
+        bucket.delete(listener as AnyListener);
       };
+    },
+
+    getPluginErrors(): readonly PluginError[] {
+      return pluginErrors;
     },
 
     isDirty(): boolean {
@@ -306,8 +383,4 @@ function toMeta(envelope: EditorEnvelope): EnvelopeMeta {
     // 深拷贝：批注对象与 payload 都是调用方的，浅拷数组挡不住后续改写。
     annotations: cloneJson(envelope.annotations),
   };
-}
-
-function describe(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

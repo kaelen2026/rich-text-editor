@@ -67,7 +67,7 @@ export interface LoadResult {
 }
 
 /** 命令失败原因可判别，便于线上定位（方案 §8.1）。 */
-export type CommandFailureReason = "disabled" | "destroyed" | "invalid";
+export type CommandFailureReason = "disabled" | "destroyed" | "invalid" | "pluginError";
 
 export interface CommandResult {
   ok: boolean;
@@ -82,10 +82,61 @@ export interface CommandQuery {
 }
 
 /**
- * 事件名。只列出当前真实会派发的事件；后续切片按需增补
- * （`patch`、`pluginError`、`documentDegraded` 等见方案 §9.4）。
+ * 插件降级的原因。每一类都要能定位到"谁、因为什么、和谁冲突"，
+ * 否则线上只能看到功能消失（方案 §8.3）。
  */
-export type EditorEventName = "change" | "documentDegraded";
+export type PluginErrorKind =
+  /** 依赖成环，环上插件全部禁用。 */
+  | "cycle"
+  /** 依赖不存在，或依赖的插件已被禁用（递归禁用）。 */
+  | "missingDependency"
+  /** 插件重名，后注册者禁用。 */
+  | "duplicatePlugin"
+  /** 节点名/标记名与核心集或先注册者冲突，后注册者禁用。 */
+  | "duplicateNode"
+  | "duplicateMark"
+  /** 命令名与核心命令或先注册者冲突，只忽略这一条命令。 */
+  | "duplicateCommand"
+  /** 名字本身非法：持久化名缺 `co_` 前缀，或命令名没有以插件名打头。 */
+  | "invalidName"
+  /** 插件入口点抛错，被 runtime 捕获（方案 §8.6）。 */
+  | "runtimeError";
+
+/**
+ * 一次插件降级记录。启动期冲突与运行期熔断共用同一形态，
+ * 宿主只需要一处上报与一处提示。
+ */
+export interface PluginError {
+  /** 被降级的插件名。 */
+  plugin: string;
+  kind: PluginErrorKind;
+  /** 冲突的具体项：节点名、标记名、命令名或依赖名。 */
+  item?: string;
+  /** 冲突对方：先注册者的插件名，或 `core` 表示冻结核心集。 */
+  conflictWith?: string;
+  /** 该插件的能力当前是否整体不可用。重复命令名只丢一条命令，此处为 false。 */
+  disabled: boolean;
+  /**
+   * 本会话内是否不再恢复。启动期的冲突禁用即为 true；运行期抛错在达到熔断阈值
+   * （60 秒内 3 次）前为 false——下一次调用还会再试一次（方案 §8.6 第 3 条）。
+   */
+  tripped: boolean;
+  /** 面向宿主的可读描述，可直接展示。 */
+  message: string;
+}
+
+/**
+ * 事件名。只列出当前真实会派发的事件；后续切片按需增补
+ * （`patch` 等见方案 §9.4）。
+ */
+export type EditorEventName = "change" | "documentDegraded" | "pluginError";
+
+/** 事件载荷。没有载荷的事件为 `undefined`，`() => void` 形态的监听器照常可用。 */
+export interface EditorEventPayload {
+  change: undefined;
+  documentDegraded: undefined;
+  pluginError: PluginError;
+}
 
 /**
  * 编辑器三态。语义互不相同，不能用一个布尔量表达（方案 §4.1）：

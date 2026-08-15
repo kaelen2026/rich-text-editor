@@ -3,7 +3,7 @@ import type { EditorPlugin } from "./plugins";
 import { createRuntime } from "./runtime";
 
 describe("插件运行时", () => {
-  it("拒绝没有 co_ 命名空间的持久化标记", () => {
+  it("持久化名缺 co_ 命名空间时降级启动，不让宿主白屏", () => {
     const invalidPlugin: EditorPlugin = {
       name: "legacy",
       version: "1.0.0",
@@ -11,7 +11,13 @@ describe("插件运行时", () => {
       extendSchema: (schema) => schema.addMark("highlight", { toDOM: () => ["mark", 0] }),
     };
 
-    expect(() => createRuntime({ plugins: [invalidPlugin] })).toThrow(/co_/);
+    const runtime = createRuntime({ plugins: [invalidPlugin] });
+
+    expect(runtime.getPluginErrors()).toMatchObject([
+      { plugin: "legacy", kind: "invalidName", item: "highlight", disabled: true },
+    ]);
+    // 编辑器本身照常可用。
+    expect(runtime.execute("selection.selectAll")).toMatchObject({ ok: true });
   });
 
   it("在扩展 schema 前按依赖顺序启动插件", () => {
