@@ -35,6 +35,9 @@ importers:
       '@kaelen/editor-runtime':
         specifier: workspace:*
         version: link:packages/editor-runtime
+      '@kaelen/editor-ui-model':
+        specifier: workspace:*
+        version: link:packages/editor-ui-model
       '@testing-library/react':
         specifier: ^16.3.0
         version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)

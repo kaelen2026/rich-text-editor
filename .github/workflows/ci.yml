@@ -42,5 +42,8 @@ jobs:
       - name: Run tests
         run: pnpm test
 
+      - name: Enforce performance budget
+        run: pnpm bench
+
       - name: Validate commit messages
         run: pnpm exec commitlint --from "${{ github.event.pull_request.base.sha }}" --to "${{ github.event.pull_request.head.sha }}"
