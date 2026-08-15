@@ -21,7 +21,8 @@ export function sanitizeDoc(schema: Schema, doc: NodeJSON): SanitizeResult {
 /** `sanitizeDoc` 的逆操作：把兜底节点还原成它保存的原始 JSON。 */
 export function restoreDoc(doc: NodeJSON): NodeJSON {
   if (doc.type === UNKNOWN_BLOCK || doc.type === UNKNOWN_INLINE) {
-    return doc.attrs?.original as NodeJSON;
+    // 同样深拷贝：调用方改写取回的文档，不能污染编辑器内部状态。
+    return structuredClone(doc.attrs?.original) as NodeJSON;
   }
   const restored: NodeJSON = { type: doc.type };
   if (doc.attrs !== undefined) {
@@ -51,7 +52,9 @@ function sanitizeNode(
     }
     return {
       type: prefersInline(schema, parentType) ? UNKNOWN_INLINE : UNKNOWN_BLOCK,
-      attrs: { nodeName: node.type, original: node },
+      // 深拷贝：兜底节点保存的是快照，不是调用方对象的引用。否则调用方之后
+      // 改自己那份 JSON，就会改到编辑器里已装载的内容。
+      attrs: { nodeName: node.type, original: structuredClone(node) },
     };
   }
 

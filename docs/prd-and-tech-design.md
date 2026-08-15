@@ -448,7 +448,7 @@ unknown_inline: { group: 'inline', inline: true, atom: true, attrs: { original: 
 
 规则：
 
-1. 加载时遇到 Schema 中不存在的节点名 → 包装为 `unknown_block` / `unknown_inline`，`attrs.original` **原样保存该节点完整 JSON**（含子树）。
+1. 加载时遇到 Schema 中不存在的节点名 → 包装为 `unknown_block` / `unknown_inline`，`attrs.original` **原样保存该节点完整 JSON**（含子树）。该 JSON 必须以**深拷贝**存入、并在取回时深拷贝返回：调用方之后修改自己传入的对象，或修改 `getDocument()` 的返回值，都不得影响编辑器状态（反之亦然）。"原样保存"的强度等于这份快照的隔离度。
 2. 渲染为只读占位，可整体选中、复制、删除，不可内部编辑。
 3. 保存时**原样写回原始 JSON**，`plugins` 版本号一并保留，不因途经一次编辑而降级。
 4. 若同一会话中稍后安装了对应插件，重新加载即恢复为正常节点。
