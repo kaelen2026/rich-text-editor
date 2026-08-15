@@ -80,6 +80,7 @@ export function createImagePlugin(options: ImagePluginOptions): EditorPlugin {
     },
     registerCommands: (commands) => {
       commands.add("image.insert", controller.insertCommand);
+      commands.add("image.insertAsset", controller.insertAssetCommand);
       commands.add("image.retry", controller.retryCommand);
       commands.add("image.cancel", controller.cancelCommand);
     },
@@ -105,6 +106,22 @@ class ImageUploadController implements SessionExtension {
         return { ok: true };
       }
       this.insert(file, altFrom(input));
+      return { ok: true };
+    },
+    active: () => false,
+  };
+
+  /** 远端图片必须先由服务端转存；编辑器只接受其返回的最终资产 URL。 */
+  readonly insertAssetCommand: SessionCommand = {
+    run: (_session, apply, input) => {
+      const asset = uploadedAssetFrom(input);
+      if (!asset || !this.bridge) {
+        return { ok: false, reason: "invalid", detail: "需要服务端转存后的图片资产" };
+      }
+      if (!apply) {
+        return { ok: true };
+      }
+      this.insertAsset(asset);
       return { ok: true };
     },
     active: () => false,
@@ -237,6 +254,24 @@ class ImageUploadController implements SessionExtension {
     bridge.dispatch(transaction);
     this.files.set(uploadId, file);
     this.begin(uploadId, file);
+  }
+
+  private insertAsset(asset: UploadedAsset): void {
+    const bridge = this.bridge;
+    const nodeType = bridge?.schema.nodes[IMAGE_NODE];
+    if (!bridge || !nodeType) {
+      return;
+    }
+    bridge.dispatch(
+      bridge.getState().tr.replaceSelectionWith(
+        nodeType.create({
+          src: asset.url,
+          alt: asset.alt ?? "",
+          width: asset.width ?? null,
+          height: asset.height ?? null,
+        }),
+      ),
+    );
   }
 
   private handleFiles(event: ClipboardEvent | DragEvent): boolean {
@@ -415,6 +450,30 @@ function altFrom(input: unknown): string | undefined {
   }
   const alt = (input as { alt: unknown }).alt;
   return typeof alt === "string" ? alt : undefined;
+}
+
+function uploadedAssetFrom(input: unknown): UploadedAsset | undefined {
+  if (!input || typeof input !== "object" || !("asset" in input)) {
+    return undefined;
+  }
+  const asset = (input as { asset: unknown }).asset;
+  if (!asset || typeof asset !== "object" || typeof (asset as { url?: unknown }).url !== "string") {
+    return undefined;
+  }
+  const { url, alt, width, height } = asset as Record<string, unknown>;
+  try {
+    if (!url || !["http:", "https:"].includes(new URL(url as string).protocol)) {
+      return undefined;
+    }
+  } catch {
+    return undefined;
+  }
+  return {
+    url: url as string,
+    ...(typeof alt === "string" ? { alt } : {}),
+    ...(typeof width === "number" && Number.isFinite(width) && width > 0 ? { width } : {}),
+    ...(typeof height === "number" && Number.isFinite(height) && height > 0 ? { height } : {}),
+  };
 }
 
 function uploadIdFrom(input: unknown): string | undefined {

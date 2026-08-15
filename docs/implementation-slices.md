@@ -18,8 +18,8 @@
 
 | 状态 | 切片 |
 | --- | --- |
-| 已合并 | S1–S11、S13–S18；S13 的 y-prosemirror 前置验证已记录在 `docs/y-prosemirror-compatibility.md`。 |
-| 待决策 | S12：远端图片转存服务归属。 |
+| 已合并 | S1–S18；S12 的演示服务与可替换服务契约位于 `apps/remote-image-service` 和 `packages/editor-remote-image-service`。S13 的 y-prosemirror 前置验证已记录在 `docs/y-prosemirror-compatibility.md`。 |
+| 待决策 | 无。 |
 
 S17 的已交付范围是基准文档、五项 Node/jsdom 测量、`getDocument()` 快照缓存和 CI 门禁。字数统计与 NodeView 懒挂载尚无对应的公开能力或 NodeView，后续在引入这些能力时单独实现和测量。
 
@@ -172,14 +172,13 @@ graph TD
 - **依赖**：S8（复制路径要剥离 uploadId）、S4。
 - **PRD**：§8.5、§9.5、§16.2
 
-### S12. 远端图片转存与 SSRF 控制 · **HITL**
+### S12. 远端图片转存与 SSRF 控制 · AFK
 
-- **动什么**：粘贴的远端图片一律服务端转存，不热链；五条 SSRF 控制（协议仅 http/https、DNS 解析后拒私有网段/回环/链路本地/元数据地址、不跟随重定向或每跳复检、10MB + 5 秒上限、`Content-Type` 以实际字节嗅探校验）；失败则丢图并提示"图片需手动上传"。
+- **动什么**：远端图片一律通过服务端转存，不热链；演示服务位于 `apps/remote-image-service`，核心策略与 `RemoteImageServices` 可替换契约位于 `packages/editor-remote-image-service`。五条 SSRF 控制为协议仅 http/https、DNS 解析后拒私有网段/回环/链路本地/元数据地址、每跳重定向复检、10MB + 5 秒上限、`Content-Type` 与实际字节嗅探双校验。服务成功后只返回最终资产 URL，宿主通过 `image.insertAsset` 持久化该地址。
 - **演示**：粘贴含远端图片的网页内容 → 图片被转存为对象存储 URL；构造指向 `127.0.0.1` / `169.254.169.254` / 302 跳内网的图片 → 全部被拒并提示。
-- **验证**：SSRF 用例集单测（每条控制一例）。
+- **验证**：SSRF 用例集单测覆盖私网/元数据地址、重定向跳转和伪造图片；运行 `pnpm demo:remote-image-service` 可启动本地服务。
 - **回滚**：单 commit；回滚后远端图片按"丢弃并提示"处理，不回退到热链。
 - **依赖**：S11。
-- **HITL 决策**：转存端点落在哪——复用现有后端、新起一个 Node 服务、还是本片只交付客户端策略 + 接口契约由业务方实现服务端。这个决定改变本片的交付物边界，先定再做。
 - **PRD**：§11.3.1、§13、§16.3
 
 ### S13. Word / Excel / 纯文本来源规则 + 阈值 · AFK
@@ -252,11 +251,11 @@ graph TD
 
 其余切片在有真实数据后仍可安全 revert：功能消失，但已有文档因 S2 兜底不丢内容。**这就是 S2 必须排在所有 `co_` 节点之前的原因。**
 
-## 5. 需要先定掉的 HITL 决策
+## 5. 已落实的 HITL 决策
 
 只有一片是 HITL，且因为一个待定事实，不是因为技术不清楚：
 
-1. **S12 的转存服务归属** —— 复用现有后端 / 新起 Node 服务 / 只交付客户端策略与接口契约。改变该片交付物边界。
+所有原先的 HITL 决策均已落实：S12 选择在本仓库提供 Node 演示服务和可替换服务契约；S18 已交付 Vue 适配层与工具栏实现。
 
 另有一项**不构成切片的前置义务**（方案 §9.4）：在 S13 完成前完成 `y-prosemirror` 与本方案 Schema/NodeView（尤其表格与自定义 NodeView）的兼容性验证。它是一个决策任务不是可上线的片，产出是一个结论：M4 换 Yjs UndoManager 时影响面是否仍限于 `editor-pm-adapter`。别拖到 M4 才发现不兼容。
 
