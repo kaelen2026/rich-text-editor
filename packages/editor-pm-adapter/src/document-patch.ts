@@ -23,7 +23,7 @@ export type PatchApplyResult =
 
 /** 把 PM 的一步转换成平台 PatchOp；复杂结构步骤由事务转换器回退为整篇 replace。 */
 export function stepToPatchOp(step: Step): PatchOp | null {
-  if (step instanceof ReplaceStep) {
+  if (step instanceof ReplaceStep && step.slice instanceof Slice) {
     return { type: "replace", from: step.from, to: step.to, slice: sliceToJSON(step.slice) };
   }
   if (step instanceof AddMarkStep || step instanceof RemoveMarkStep) {
@@ -145,11 +145,15 @@ function contentSlice(document: ProseMirrorNode): SliceJSON {
 }
 
 function sliceToJSON(slice: Slice): SliceJSON {
-  const json = slice.toJSON() as { content?: NodeJSON[]; openStart?: number; openEnd?: number };
+  const json = slice.toJSON() as {
+    content?: NodeJSON[];
+    openStart?: number;
+    openEnd?: number;
+  } | null;
   return {
-    content: json.content ?? [],
-    openStart: json.openStart ?? 0,
-    openEnd: json.openEnd ?? 0,
+    content: json?.content ?? [],
+    openStart: json?.openStart ?? 0,
+    openEnd: json?.openEnd ?? 0,
   };
 }
 

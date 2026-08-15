@@ -5,6 +5,7 @@ import { inputRules, textblockTypeInputRule, wrappingInputRule } from "prosemirr
 import { keymap } from "prosemirror-keymap";
 import type { MarkType, NodeType, Schema } from "prosemirror-model";
 import { type Command, Plugin, type Transaction } from "prosemirror-state";
+import { goToNextCell, tableEditing } from "prosemirror-tables";
 import {
   indentListItem,
   insertHardBreak,
@@ -72,6 +73,22 @@ export function editorPlugins(schema: Schema, isComposing: () => boolean = () =>
     keymap(shortcutBindings(schema)),
     keymap(baseKeymap),
     unknownNodeGuard(schema, isComposing),
+    ...tablePlugins(schema),
+  ];
+}
+
+/** 表格插件安装后才启用其结构修复与导航，未装表格的会话保持零额外行为。 */
+function tablePlugins(schema: Schema): Plugin[] {
+  const required = ["co_table", "co_table_row", "co_table_cell", "co_table_header"];
+  if (!required.every((name) => schema.nodes[name])) {
+    return [];
+  }
+  return [
+    tableEditing(),
+    keymap({
+      Tab: goToNextCell(1),
+      "Shift-Tab": goToNextCell(-1),
+    }),
   ];
 }
 

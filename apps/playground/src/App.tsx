@@ -1,5 +1,6 @@
 import { createEditor, type EditorOptions, type RichEditor } from "@kaelen/editor-api";
 import { createLinkPlugin } from "@kaelen/editor-plugin-link";
+import { createTablePlugin } from "@kaelen/editor-plugin-table";
 import { applyDocumentPatch, buildSchema } from "@kaelen/editor-pm-adapter";
 import {
   EditorContent,
@@ -113,7 +114,9 @@ interface Boot {
 
 function bootEditor(faulty: boolean, document: EditorEnvelope): Boot {
   const editor = createEditor({
-    plugins: faulty ? [createLinkPlugin(), ...FAULTY_PLUGINS] : [createLinkPlugin()],
+    plugins: faulty
+      ? [createLinkPlugin(), createTablePlugin(), ...FAULTY_PLUGINS]
+      : [createLinkPlugin(), createTablePlugin()],
   });
   const result = editor.loadDocument(document);
   return { editor, unknownNodes: result.unknownNodes, faulty, baseDocument: document };
@@ -231,6 +234,18 @@ function Toolbar({
         <CommandButton command="link.unset" label="取消链接" />
         <CommandButton command="history.undo" label="撤销" title="Cmd/Ctrl+Z" />
         <CommandButton command="history.redo" label="重做" title="Cmd/Ctrl+Shift+Z" />
+      </div>
+      <div className="toolbar">
+        <CommandButton
+          command="table.insert"
+          input={{ rows: 2, cols: 2, withHeaderRow: true }}
+          label="插入表格"
+        />
+        <CommandButton command="table.addRowAfter" label="加行" />
+        <CommandButton command="table.addColumnAfter" label="加列" />
+        <CommandButton command="table.mergeCells" label="合并单元格" />
+        <CommandButton command="table.splitCell" label="拆分单元格" />
+        <CommandButton command="table.delete" label="删除表格" />
       </div>
       <div className="toolbar">
         <ModeSwitch />
