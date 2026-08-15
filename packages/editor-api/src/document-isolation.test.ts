@@ -59,3 +59,87 @@ describe("文档与调用方的隔离", () => {
     expect(attrsOf(editor.getDocument(), 1).url).toBe("https://example.com");
   });
 });
+
+describe("信封其余字段的隔离", () => {
+  it("调用方改写 getDocument() 的 plugins，不污染编辑器状态", () => {
+    const editor = createEditor();
+    editor.loadDocument(envelopeWithUnknown());
+
+    editor.getDocument().plugins.embed = 999;
+
+    expect(editor.getDocument().plugins).toEqual({ embed: 1 });
+  });
+
+  it("调用方向 getDocument() 的 annotations 追加元素，不污染编辑器状态", () => {
+    const editor = createEditor();
+    editor.loadDocument(envelopeWithUnknown());
+
+    editor.getDocument().annotations.push({
+      id: "a1",
+      from: 0,
+      to: 1,
+      orphaned: false,
+      payload: null,
+    });
+
+    expect(editor.getDocument().annotations).toEqual([]);
+  });
+
+  it("装载后调用方改自己 annotations 里的对象，不影响编辑器", () => {
+    const editor = createEditor();
+    const input = envelopeWithUnknown();
+    input.annotations = [
+      { id: "a1", from: 0, to: 1, orphaned: false, payload: { note: "原始批注" } },
+    ];
+    editor.loadDocument(input);
+
+    (input.annotations[0]?.payload as Record<string, unknown>).note = "被外部改掉了";
+
+    expect(editor.getDocument().annotations[0]?.payload).toEqual({ note: "原始批注" });
+  });
+});
+
+describe("已经是兜底形态的输入", () => {
+  it("输入本身已含兜底节点时，调用方之后的改写同样不影响编辑器", () => {
+    const editor = createEditor();
+    const input: EditorEnvelope = {
+      envelope: 1,
+      schemaVersion: 1,
+      plugins: {},
+      doc: {
+        type: "doc",
+        content: [
+          {
+            type: "unknown_block",
+            attrs: {
+              nodeName: "co_embed",
+              original: { type: "co_embed", attrs: { url: "https://example.com" } },
+            },
+          },
+        ],
+      },
+      annotations: [],
+    };
+    editor.loadDocument(input);
+
+    const original = attrsOf(input, 0).original as { attrs: Record<string, unknown> };
+    original.attrs.url = "被外部改掉了";
+
+    expect(editor.getDocument().doc.content?.[0]).toEqual({
+      type: "co_embed",
+      attrs: { url: "https://example.com" },
+    });
+  });
+
+  it("无法结构化克隆的属性不会让装载或取回抛异常", () => {
+    const editor = createEditor();
+    const input = envelopeWithUnknown();
+    attrsOf(input, 1).onClick = () => "不可克隆";
+
+    const result = editor.loadDocument(input);
+
+    expect(result.ok).toBe(true);
+    expect(() => editor.getDocument()).not.toThrow();
+    expect(attrsOf(editor.getDocument(), 1).url).toBe("https://example.com");
+  });
+});

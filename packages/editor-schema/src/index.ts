@@ -1,3 +1,4 @@
+export { cloneJson } from "./clone";
 export { coreMarks, coreNodes, UNKNOWN_BLOCK, UNKNOWN_INLINE } from "./core-spec";
 export {
   createEmptyEnvelope,
