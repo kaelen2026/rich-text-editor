@@ -1,12 +1,20 @@
 import { coreMarks, coreNodes } from "@kaelen/editor-schema";
-import type { CoreMarkSpec, CoreNodeSpec, DomOutputSpec } from "@kaelen/editor-shared-types";
+import type {
+  CoreMarkSpec,
+  CoreNodeSpec,
+  CoreParseRule,
+  CoreTagParseRule,
+  DomOutputSpec,
+} from "@kaelen/editor-shared-types";
 import {
   type DOMOutputSpec,
   type MarkSpec,
   type NodeSpec,
+  type ParseRule,
   type Mark as ProseMirrorMark,
   type Node as ProseMirrorNode,
   Schema,
+  type TagParseRule,
 } from "prosemirror-model";
 
 /**
@@ -44,24 +52,52 @@ function mapSpecs<TIn, TOut>(
  * 不得访问 `document` 或文档内部"这条约束的结构性保障，不只是约定。
  */
 function toNodeSpec(spec: CoreNodeSpec): NodeSpec {
-  const { toDOM, ...rest } = spec;
+  const { toDOM, parseDOM, ...rest } = spec;
   if (!toDOM) {
-    return rest;
+    return { ...rest, parseDOM: parseDOM ? toTagParseRules(parseDOM) : undefined };
   }
   return {
     ...rest,
+    parseDOM: parseDOM ? toTagParseRules(parseDOM) : undefined,
     toDOM: (node: ProseMirrorNode) => asDomOutputSpec(toDOM({ attrs: node.attrs })),
   };
 }
 
 function toMarkSpec(spec: CoreMarkSpec): MarkSpec {
-  const { toDOM, ...rest } = spec;
+  const { toDOM, parseDOM, ...rest } = spec;
   if (!toDOM) {
-    return rest;
+    return { ...rest, parseDOM: parseDOM ? toMarkParseRules(parseDOM) : undefined };
   }
   return {
     ...rest,
+    parseDOM: parseDOM ? toMarkParseRules(parseDOM) : undefined,
     toDOM: (mark: ProseMirrorMark) => asDomOutputSpec(toDOM({ attrs: mark.attrs })),
+  };
+}
+
+function toMarkParseRules(rules: readonly CoreParseRule[]): ParseRule[] {
+  return rules.map((rule) => ("tag" in rule ? toTagParseRule(rule) : (rule as ParseRule)));
+}
+
+function toTagParseRules(rules: readonly CoreTagParseRule[]): TagParseRule[] {
+  return rules.map(toTagParseRule);
+}
+
+function toTagParseRule(rule: CoreTagParseRule): TagParseRule {
+  if (!rule.attrsFromDOM) {
+    return rule as TagParseRule;
+  }
+  const { attrsFromDOM, ...rest } = rule;
+  return {
+    ...rest,
+    getAttrs: (element: HTMLElement) => {
+      return Object.fromEntries(
+        Object.entries(attrsFromDOM).map(([attribute, source]) => [
+          attribute,
+          element.getAttribute(source),
+        ]),
+      );
+    },
   };
 }
 

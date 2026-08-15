@@ -2,6 +2,7 @@ import type { NodeJSON } from "@kaelen/editor-shared-types";
 import { Fragment, type Schema, Slice } from "prosemirror-model";
 import { Plugin } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
+import { parseExternalHTML } from "./external-html";
 
 /** Safari 等环境可能丢掉它，因此只作为内部复制的快速通道。 */
 export const CLIPBOARD_MIME = "application/x-company-editor+json";
@@ -117,8 +118,8 @@ export function writeClipboard(
 }
 
 /**
- * ProseMirror 的默认 HTML/纯文本解析仍保留给外部来源。这里只抢先消费可验证的
- * 内部 payload，以及需要强制纯文本的两种场景。
+ * 内部 payload 优先恢复高保真 Slice；外部 HTML 则经 inert document 和 Schema
+ * 白名单管线解析，绝不交给默认的活 DOM 粘贴路径。
  */
 export function createClipboardPlugin(options: ClipboardPluginOptions): Plugin {
   let pastePlainText = false;
@@ -185,6 +186,19 @@ export function createClipboardPlugin(options: ClipboardPluginOptions): Plugin {
           }
           if (data.files.length > 0 && options.handleFiles?.(view, data.files)) {
             clipboardEvent.preventDefault();
+            return true;
+          }
+          const html = data.getData("text/html");
+          if (html) {
+            clipboardEvent.preventDefault();
+            const slice = parseExternalHTML(view.state.schema, html);
+            if (slice.content.size > 0) {
+              view.dispatch(
+                view.state.tr.replaceSelection(slice).scrollIntoView().setMeta("paste", true),
+              );
+            } else {
+              view.pasteText(data.getData("text/plain"), clipboardEvent);
+            }
             return true;
           }
           return false;

@@ -13,8 +13,9 @@ export function createLinkPlugin(): EditorPlugin {
     extendSchema: (schema) => {
       schema.addMark(LINK_MARK, {
         attrs: { href: {} },
-        // 不声明 parseDOM：平台的 CoreParseRule 还表达不了 getAttrs，
-        // 解析出来的链接 href 会是 null；在能连同协议一起校验之前不开这条路径。
+        // 外部 HTML 管线先做协议白名单校验，再让声明式映射读取 href；Schema
+        // 本身仍没有可执行的 getAttrs 钩子，服务端可复用、也便于审计。
+        parseDOM: [{ tag: "a", attrsFromDOM: { href: "href" } }],
         toDOM: (node) => {
           const href = safeHref(node.attrs.href);
           // 白名单必须在渲染处再判一次：文档可能来自 localStorage、服务端或导入，

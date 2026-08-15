@@ -230,6 +230,11 @@ export interface CoreTagParseRule {
    * 也要能被审计——一个能跑任意代码的钩子两样都做不到。
    */
   attrs?: Record<string, unknown>;
+  /**
+   * 从已由上层白名单化的 DOM 读取属性。映射是声明式的，避免把可执行的
+   * `getAttrs` 钩子泄漏到可共享的 Schema 定义中。
+   */
+  attrsFromDOM?: Record<string, string>;
   /** 代码块等需要保留原样空白的节点。 */
   preserveWhitespace?: boolean | "full";
 }
