@@ -13,6 +13,7 @@
     "@kaelen/editor-shared-types": "workspace:*",
     "prosemirror-commands": "^1.7.1",
     "prosemirror-history": "^1.4.1",
+    "prosemirror-inputrules": "^1.5.1",
     "prosemirror-keymap": "^1.2.3",
     "prosemirror-model": "^1.25.3",
     "prosemirror-schema-list": "^1.5.1",

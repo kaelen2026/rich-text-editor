@@ -1,6 +1,7 @@
-import type { EditorMode, NodeJSON } from "@kaelen/editor-shared-types";
+import type { EditorMode, NodeJSON, SelectionSnapshot } from "@kaelen/editor-shared-types";
 import { type MarkType, Node as ProseMirrorNode, type Schema } from "prosemirror-model";
 import { type Command, EditorState, type Transaction } from "prosemirror-state";
+import { Mapping } from "prosemirror-transform";
 import { type DirectEditorProps, EditorView } from "prosemirror-view";
 import { isBlockOfType, isCheckedTaskItem, isWithinNode } from "./block-commands";
 import { editorPlugins } from "./plugins";
@@ -26,18 +27,22 @@ export class EditorSession {
   private state: EditorState;
   private view: EditorView | null = null;
   private mode: EditorMode;
+  private isComposing = false;
+  private compositionTimer: ReturnType<typeof setTimeout> | undefined;
+  private readonly pendingTransactions: Array<{ transaction: Transaction; mapping: Mapping }> = [];
 
   constructor(
     private readonly schema: Schema,
     doc: NodeJSON,
     private readonly onChange: SessionChangeListener = () => {},
     mode: EditorMode = "edit",
+    private readonly onCompositionChange: (composing: boolean) => void = () => {},
   ) {
     this.mode = mode;
     this.state = EditorState.create({
       schema,
       doc: ProseMirrorNode.fromJSON(schema, sanitizeDoc(schema, doc).doc),
-      plugins: editorPlugins(schema),
+      plugins: editorPlugins(schema, () => this.isComposing),
     });
   }
 
@@ -51,6 +56,11 @@ export class EditorSession {
 
   get currentMode(): EditorMode {
     return this.mode;
+  }
+
+  /** 组合期间模型只接收用户输入，业务命令和异步事务必须等待。 */
+  get composing(): boolean {
+    return this.isComposing;
   }
 
   /** 切换三态。视图已挂载时就地改属性，不重建，选区与历史都保住。 */
@@ -87,6 +97,23 @@ export class EditorSession {
   get selection(): SelectionRange {
     const { anchor, head } = this.state.selection;
     return { anchor, head };
+  }
+
+  get selectionSnapshot(): SelectionSnapshot {
+    const { $from, empty } = this.state.selection;
+    const { storedMarks } = this.state;
+    const marks = storedMarks ?? $from.marks();
+    const path: string[] = [];
+    for (let depth = 0; depth <= $from.depth; depth += 1) {
+      path.push($from.node(depth).type.name);
+    }
+    return {
+      empty,
+      marks: marks.map((mark) => mark.type.name),
+      blockType: $from.parent.type.name,
+      path,
+      composing: this.isComposing,
+    };
   }
 
   /**
@@ -126,6 +153,16 @@ export class EditorSession {
     this.view = new EditorView(element, {
       state: this.state,
       dispatchTransaction: (transaction) => this.applyTransaction(transaction),
+      handleDOMEvents: {
+        compositionstart: () => {
+          this.setComposing(true);
+          return false;
+        },
+        compositionend: () => {
+          this.setComposing(false);
+          return false;
+        },
+      },
       ...this.modeProps(),
     });
   }
@@ -133,6 +170,17 @@ export class EditorSession {
   unmount(): void {
     this.view?.destroy();
     this.view = null;
+  }
+
+  /** 实例销毁时取消兜底计时器，避免已销毁 runtime 仍收到组合态通知。 */
+  destroy(): void {
+    this.unmount();
+    if (this.compositionTimer !== undefined) {
+      clearTimeout(this.compositionTimer);
+      this.compositionTimer = undefined;
+    }
+    this.pendingTransactions.length = 0;
+    this.isComposing = false;
   }
 
   focus(): void {
@@ -148,7 +196,7 @@ export class EditorSession {
     this.state = EditorState.create({
       schema: this.schema,
       doc: ProseMirrorNode.fromJSON(this.schema, sanitized),
-      plugins: editorPlugins(this.schema),
+      plugins: editorPlugins(this.schema, () => this.isComposing),
     });
     this.view?.updateState(this.state);
     return { unknownNodes, unknownMarks };
@@ -188,6 +236,10 @@ export class EditorSession {
   }
 
   private dispatch(transaction: Transaction): void {
+    if (this.isComposing && transaction.docChanged) {
+      this.pendingTransactions.push({ transaction, mapping: new Mapping() });
+      return;
+    }
     if (this.view) {
       // 走视图的 dispatchTransaction，最终仍汇聚到 applyTransaction。
       this.view.dispatch(transaction);
@@ -198,9 +250,58 @@ export class EditorSession {
 
   /** 唯一的状态推进入口：无论来自用户输入还是命令，都在这里汇聚并通知。 */
   private applyTransaction(transaction: Transaction): void {
+    for (const pending of this.pendingTransactions) {
+      pending.mapping.appendMapping(transaction.mapping);
+    }
     this.state = this.state.apply(transaction);
     this.view?.updateState(this.state);
     this.onChange(transaction.docChanged);
+  }
+
+  /** DOM composition 事件与超时兜底都汇到这里，避免重复冲刷队列。 */
+  private setComposing(composing: boolean): void {
+    if (this.isComposing === composing) {
+      return;
+    }
+    this.isComposing = composing;
+    if (composing) {
+      this.compositionTimer = setTimeout(() => this.setComposing(false), 5_000);
+    } else {
+      if (this.compositionTimer !== undefined) {
+        clearTimeout(this.compositionTimer);
+        this.compositionTimer = undefined;
+      }
+    }
+    this.onCompositionChange(composing);
+    if (!composing) {
+      this.flushPendingTransactions();
+    }
+  }
+
+  /**
+   * 延迟事务的 step 以其排队后的用户输入 Mapping 重放；每冲刷一笔，再把它的
+   * Mapping 加进后续事务，因而同一组合态内的多笔异步事务也保持原有顺序。
+   */
+  private flushPendingTransactions(): void {
+    while (this.pendingTransactions.length > 0) {
+      const pending = this.pendingTransactions.shift();
+      if (!pending) {
+        return;
+      }
+      const transaction = this.state.tr;
+      for (const step of pending.transaction.steps) {
+        const mapped = step.map(pending.mapping);
+        if (mapped) {
+          transaction.step(mapped);
+        }
+      }
+      if (pending.transaction.getMeta("addToHistory") === false) {
+        transaction.setMeta("addToHistory", false);
+      }
+      if (transaction.docChanged || transaction.selectionSet) {
+        this.applyTransaction(transaction);
+      }
+    }
   }
 
   /**

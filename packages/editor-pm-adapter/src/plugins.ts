@@ -1,6 +1,7 @@
 import { UNKNOWN_BLOCK, UNKNOWN_INLINE } from "@kaelen/editor-schema";
 import { baseKeymap, chainCommands, newlineInCode, toggleMark } from "prosemirror-commands";
 import { history, redo, undo } from "prosemirror-history";
+import { inputRules, textblockTypeInputRule, wrappingInputRule } from "prosemirror-inputrules";
 import { keymap } from "prosemirror-keymap";
 import type { MarkType, NodeType, Schema } from "prosemirror-model";
 import { type Command, Plugin, type Transaction } from "prosemirror-state";
@@ -64,13 +65,37 @@ function shortcutBindings(schema: Schema): Record<string, Command> {
  * 状态插件。历史被限制在这一处，上层只通过 `history.undo`/`history.redo`
  * 命令访问——M4 换成 Yjs UndoManager 时影响面止于此包（方案 §9.4）。
  */
-export function editorPlugins(schema: Schema): Plugin[] {
+export function editorPlugins(schema: Schema, isComposing: () => boolean = () => false): Plugin[] {
   return [
     history(),
+    compositionInputRules(schema),
     keymap(shortcutBindings(schema)),
     keymap(baseKeymap),
-    unknownNodeGuard(schema),
+    unknownNodeGuard(schema, isComposing),
   ];
+}
+
+/** Markdown 风格输入规则；smart quotes 故意未启用，默认不改写普通标点。 */
+function compositionInputRules(schema: Schema): Plugin {
+  const heading = schema.nodes.heading;
+  const blockquote = schema.nodes.blockquote;
+  const bulletList = schema.nodes.bullet_list;
+  const orderedList = schema.nodes.ordered_list;
+  const codeBlock = schema.nodes.code_block;
+  if (!heading || !blockquote || !bulletList || !orderedList || !codeBlock) {
+    throw new Error("核心输入规则所需节点缺失");
+  }
+  return inputRules({
+    rules: [
+      textblockTypeInputRule(/^(#{1,4})\s$/, heading, (match) => ({
+        level: match[1]?.length ?? 1,
+      })),
+      wrappingInputRule(/^>\s$/, blockquote),
+      wrappingInputRule(/^[-*]\s$/, bulletList),
+      wrappingInputRule(/^(1)\.\s$/, orderedList, (match) => Number.parseInt(match[1] ?? "1", 10)),
+      textblockTypeInputRule(/^```\s$/, codeBlock),
+    ],
+  });
 }
 
 /**
@@ -88,7 +113,7 @@ function withoutHistory(transaction: Transaction): Transaction {
  * 一并加粗。结果是 DOM 上占位变粗、保存时标记又被丢弃——所见不等于所存。
  * 因此改由 runtime 在事务后清理，并且这个规范化事务不进历史。
  */
-function unknownNodeGuard(schema: Schema): Plugin {
+function unknownNodeGuard(schema: Schema, isComposing: () => boolean): Plugin {
   const fallbackTypes = new Set<NodeType>(
     [schema.nodes[UNKNOWN_BLOCK], schema.nodes[UNKNOWN_INLINE]].filter(
       (type): type is NodeType => type !== undefined,
@@ -97,6 +122,10 @@ function unknownNodeGuard(schema: Schema): Plugin {
 
   return new Plugin({
     appendTransaction: (transactions, _oldState, newState) => {
+      // appendTransaction 也会改文档；组合态只能让出，不得偷偷规范化。
+      if (isComposing()) {
+        return null;
+      }
       if (!transactions.some((transaction) => transaction.docChanged)) {
         return null;
       }

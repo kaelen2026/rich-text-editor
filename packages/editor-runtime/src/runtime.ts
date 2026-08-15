@@ -18,6 +18,7 @@ import type {
   LoadResult,
   NodeJSON,
   PluginError,
+  SelectionSnapshot,
 } from "@kaelen/editor-shared-types";
 import { PluginBreaker } from "./breaker";
 import { describeError, type EditorPlugin, resolvePlugins } from "./plugins";
@@ -29,6 +30,7 @@ export interface Runtime {
   queryCommand(command: string, input?: unknown): CommandQuery;
   getMode(): EditorMode;
   setMode(mode: EditorMode): void;
+  getSelectionState(): SelectionSnapshot;
   getSnapshot(): EditorSnapshot;
   subscribe<TEvent extends EditorEventName>(
     event: TEvent,
@@ -129,6 +131,10 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       invalidate();
     },
     options.mode ?? "edit",
+    (composing) => {
+      invalidate();
+      emit("compositionChanged", composing);
+    },
   );
 
   /**
@@ -222,6 +228,9 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       if (destroyed) {
         return { ok: false, reason: "destroyed" };
       }
+      if (session.composing) {
+        return { ok: false, reason: "composing" };
+      }
       const entry = commands.get(command);
       if (!entry) {
         return { ok: false, reason: "disabled", detail: `未注册的命令：${command}` };
@@ -257,6 +266,9 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       const spec = entry.command;
       const query = (): CommandQuery => {
         const active = spec.active(session, input);
+        if (session.composing) {
+          return { enabled: false, active };
+        }
         if (modeRejection(spec)) {
           return { enabled: false, active };
         }
@@ -292,6 +304,10 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       invalidate();
     },
 
+    getSelectionState(): SelectionSnapshot {
+      return session.selectionSnapshot;
+    },
+
     getSnapshot(): EditorSnapshot {
       if (!snapshot) {
         snapshot = {
@@ -300,6 +316,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
           dirty,
           mounted: session.mounted,
           mode: session.currentMode,
+          composing: session.composing,
         };
       }
       return snapshot;
@@ -364,7 +381,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
 
     /** 销毁实例。与 unmount 正交：销毁由创建者负责，卸载由框架适配层负责。 */
     destroy(): void {
-      session.unmount();
+      session.destroy();
       destroyed = true;
       invalidate();
     },
