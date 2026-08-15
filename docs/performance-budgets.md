@@ -8,6 +8,8 @@
 - 工具栏状态计算耗时。
 - 装载、读取 JSON 和渲染 HTML 的堆内存增量。
 
-`scripts/benchmark.ts` 中记录的是 Node 22 CI 的基线；门禁将每项上限设为基线的 120%。GitHub Actions 的 `Quality` 检查会运行该命令，任何指标超过该上限都会失败并显示具体指标。
+`scripts/benchmark.ts` 中的数值是初始 CI 阈值：代码以 20% 余量从基准值计算上限。它们不是已采集的 Node 22 CI 历史基线。GitHub Actions 的 `Quality` 检查会运行该命令，任何指标超过上限都会失败并显示具体指标。
+
+基准通过 jsdom 挂载 `EditorView`，因此可覆盖装载、事务和 DOM 更新路径，但不代表真实浏览器的布局、绘制或 GPU 性能。要校准阈值时，先在 Node 22 CI 连续记录至少三次结果及运行环境，再在同一个 PR 中更新脚本常量和本文件。
 
 当前没有自定义 NodeView；因此不存在可延迟挂载的 NodeView 工作。新增 NodeView 时，必须在同一变更中采用可见区域/按需挂载，并重新评估相应基线。

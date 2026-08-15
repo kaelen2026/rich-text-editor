@@ -43,8 +43,9 @@ prosemirrorJSONToYXmlFragment(schema, documentJson, ydoc.getXmlFragment("prosemi
 
 - NodeView 是本地视图层，不进入 Yjs 文档。其 `update` 必须能根据同步后的节点重绘，
   临时 UI 状态（焦点、悬浮、上传进度）必须留在插件 state 或宿主状态，不能藏在 DOM。
-- 本 PoC 验证了嵌套表格结构和原子自定义 NodeView；S10 的 `colspan` / `rowspan`、表格
-  命令及 S11 的图片 NodeView 上线后，应将真实插件节点加入同一测试矩阵。
+- 本 PoC 验证了嵌套表格结构和原子自定义 NodeView；真实表格的 `colspan` / `rowspan` 与表格
+  命令已上线，后续若引入图片 NodeView，应将这些真实插件节点加入同一测试矩阵。当前图片上传
+  使用 Decoration，不依赖 NodeView。
 - 生产接入需要在 `editor-pm-adapter` 增加显式协同会话配置：安装 `ySyncPlugin`，并将
   `recordHistory` 的实现切换到 Yjs 的 UndoManager。不要让业务层直接接触
   `EditorState`、Yjs transaction 或历史 meta。
