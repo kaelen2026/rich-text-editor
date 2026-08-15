@@ -157,4 +157,26 @@ describe("图片上传插件", () => {
 
     expect(JSON.stringify(editor.getDocument())).not.toContain("uploadId");
   });
+
+  it("只持久化远端转存服务返回的资产 URL", () => {
+    const editor = createEditor({
+      plugins: [createImagePlugin({ uploader: { upload: vi.fn() } })],
+    });
+    editor.loadDocument(document);
+
+    expect(
+      editor.execute("image.insertAsset", {
+        asset: { url: "https://assets.example/relocated.png", alt: "已转存图片" },
+      }),
+    ).toEqual({ ok: true });
+    expect(editor.getDocument().doc.content?.[0]).toEqual({
+      type: "co_image",
+      attrs: {
+        src: "https://assets.example/relocated.png",
+        alt: "已转存图片",
+        width: null,
+        height: null,
+      },
+    });
+  });
 });

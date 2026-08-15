@@ -18,6 +18,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "bench": "tsx scripts/benchmark.ts",
+    "demo:remote-image-service": "pnpm --filter @kaelen/remote-image-service-demo dev",
     "render": "tsx scripts/render.ts",
     "dev": "pnpm --filter @kaelen/playground dev",
     "prepare": "husky",
