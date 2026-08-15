@@ -129,6 +129,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       invalidate();
     },
     options.mode ?? "edit",
+    () => ({ schemaVersion: meta.schemaVersion, plugins: { ...meta.plugins } }),
   );
 
   /**

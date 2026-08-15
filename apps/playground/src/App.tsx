@@ -301,11 +301,11 @@ export function App() {
 
   return (
     <EditorProvider editor={editor}>
-      <h1>富文本编辑器 · 块级结构与插件熔断</h1>
+      <h1>富文本编辑器 · 块级结构、内部复制粘贴与插件熔断</h1>
       <p className="hint">
-        标题、引用、列表、待办、代码块、分隔线都在工具栏上，按钮的 tooltip 是对应快捷键； 列表里 Tab
-        / Shift+Tab 升降级，Shift+Enter 软换行。切换"状态"可以看只读态与禁用态的区别。 点"保存"写入
-        localStorage，刷新页面内容仍在。
+        {
+          "标题、引用、列表、待办、代码块、分隔线都在工具栏上，按钮的 tooltip 是对应快捷键；列表里 Tab / Shift+Tab 升降级，Shift+Enter 软换行。复制会把可还原的 Slice 写入 HTML 的 data-co-slice，粘贴时优先恢复它；Cmd/Ctrl+Shift+V 与代码块内粘贴始终只取纯文本。切换状态可以看只读态与禁用态的区别；点保存写入 localStorage，刷新页面内容仍在。"
+        }
       </p>
       <label className="switch">
         <input

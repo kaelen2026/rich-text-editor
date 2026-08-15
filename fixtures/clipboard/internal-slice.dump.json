@@ -1,0 +1,5 @@
+{
+  "text/html": "<div data-co-slice=\"{&quot;v&quot;:1,&quot;schemaVersion&quot;:1,&quot;plugins&quot;:{},&quot;slice&quot;:{&quot;content&quot;:[{&quot;type&quot;:&quot;paragraph&quot;,&quot;content&quot;:[{&quot;type&quot;:&quot;text&quot;,&quot;text&quot;:&quot;第一段&quot;}]},{&quot;type&quot;:&quot;paragraph&quot;,&quot;content&quot;:[{&quot;type&quot;:&quot;text&quot;,&quot;text&quot;:&quot;第二段&quot;}]}],&quot;openStart&quot;:1,&quot;openEnd&quot;:1}}\"><div><p>第一段</p><p>第二段</p></div></div>",
+  "text/plain": "第一段\n\n第二段",
+  "application/x-company-editor+json": "{\"v\":1,\"schemaVersion\":1,\"plugins\":{},\"slice\":{\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"第一段\"}]},{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"第二段\"}]}],\"openStart\":1,\"openEnd\":1}}"
+}

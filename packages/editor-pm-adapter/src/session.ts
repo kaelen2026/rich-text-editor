@@ -3,6 +3,7 @@ import { type MarkType, Node as ProseMirrorNode, type Schema } from "prosemirror
 import { type Command, EditorState, type Transaction } from "prosemirror-state";
 import { type DirectEditorProps, EditorView } from "prosemirror-view";
 import { isBlockOfType, isCheckedTaskItem, isWithinNode } from "./block-commands";
+import { type ClipboardPayloadMeta, createClipboardPlugin } from "./clipboard";
 import { editorPlugins } from "./plugins";
 import { restoreDoc, sanitizeDoc } from "./unknown";
 
@@ -32,12 +33,16 @@ export class EditorSession {
     doc: NodeJSON,
     private readonly onChange: SessionChangeListener = () => {},
     mode: EditorMode = "edit",
+    private readonly clipboardMeta: () => ClipboardPayloadMeta = () => ({
+      schemaVersion: 1,
+      plugins: {},
+    }),
   ) {
     this.mode = mode;
     this.state = EditorState.create({
       schema,
       doc: ProseMirrorNode.fromJSON(schema, sanitizeDoc(schema, doc).doc),
-      plugins: editorPlugins(schema),
+      plugins: [...editorPlugins(schema), createClipboardPlugin({ getPayloadMeta: clipboardMeta })],
     });
   }
 
@@ -148,7 +153,10 @@ export class EditorSession {
     this.state = EditorState.create({
       schema: this.schema,
       doc: ProseMirrorNode.fromJSON(this.schema, sanitized),
-      plugins: editorPlugins(this.schema),
+      plugins: [
+        ...editorPlugins(this.schema),
+        createClipboardPlugin({ getPayloadMeta: this.clipboardMeta }),
+      ],
     });
     this.view?.updateState(this.state);
     return { unknownNodes, unknownMarks };
