@@ -9,6 +9,7 @@ import {
   cloneJson,
   createEmptyEnvelope,
   migrateEnvelope,
+  renderDocumentToHTML,
   validateEnvelope,
 } from "@kaelen/editor-schema";
 import type {
@@ -34,6 +35,8 @@ import { describeError, type EditorPlugin, resolvePlugins } from "./plugins";
 export interface Runtime {
   loadDocument(input: EditorEnvelope | NodeJSON): LoadResult;
   getDocument(): EditorEnvelope;
+  /** 从当前结构化文档生成 HTML；与服务端共用纯 JS renderer。 */
+  getHTML(): string;
   execute(command: string, input?: unknown): CommandResult;
   queryCommand(command: string, input?: unknown): CommandQuery;
   getMode(): EditorMode;
@@ -256,6 +259,13 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
         annotations: cloneJson(meta.annotations),
         doc: session.docJSON,
       };
+    },
+
+    getHTML(): string {
+      return renderDocumentToHTML(session.docJSON, {
+        nodes: resolution.nodes,
+        marks: resolution.marks,
+      });
     },
 
     execute(command: string, input?: unknown): CommandResult {

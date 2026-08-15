@@ -27,6 +27,8 @@ export interface RichEditor {
    */
   loadDocument(input: EditorEnvelope | NodeJSON): LoadResult;
   getDocument(): EditorEnvelope;
+  /** 从当前结构化文档渲染 HTML；可在 Node 服务端直接调用。 */
+  getHTML(): string;
 
   execute(command: string, input?: unknown): CommandResult;
   /**
@@ -76,6 +78,7 @@ export function createEditor(options: EditorOptions = {}): RichEditor {
   return {
     loadDocument: (input) => runtime.loadDocument(input),
     getDocument: () => runtime.getDocument(),
+    getHTML: () => runtime.getHTML(),
     execute: (command, input) => runtime.execute(command, input),
     queryCommand: (command, input) => runtime.queryCommand(command, input),
     getMode: () => runtime.getMode(),

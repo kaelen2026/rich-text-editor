@@ -1,0 +1,78 @@
+{
+  "envelope": 1,
+  "schemaVersion": 1,
+  "plugins": {
+    "image": 1,
+    "link": 1,
+    "table": 1
+  },
+  "doc": {
+    "type": "doc",
+    "content": [
+      {
+        "type": "heading",
+        "attrs": { "level": 2 },
+        "content": [{ "type": "text", "text": "服务端渲染" }]
+      },
+      {
+        "type": "paragraph",
+        "content": [
+          { "type": "text", "marks": [{ "type": "strong" }], "text": "粗体" },
+          { "type": "text", "text": "和" },
+          {
+            "type": "text",
+            "marks": [{ "type": "co_link", "attrs": { "href": "https://example.com/docs" } }],
+            "text": "链接"
+          }
+        ]
+      },
+      {
+        "type": "co_table",
+        "content": [
+          {
+            "type": "co_table_row",
+            "content": [
+              {
+                "type": "co_table_header",
+                "content": [
+                  { "type": "paragraph", "content": [{ "type": "text", "text": "标题" }] }
+                ]
+              },
+              {
+                "type": "co_table_header",
+                "content": [
+                  { "type": "paragraph", "content": [{ "type": "text", "text": "数值" }] }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "co_table_row",
+            "content": [
+              {
+                "type": "co_table_cell",
+                "content": [
+                  { "type": "paragraph", "content": [{ "type": "text", "text": "第一行" }] }
+                ]
+              },
+              {
+                "type": "co_table_cell",
+                "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "42" }] }]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "co_image",
+        "attrs": {
+          "src": "https://cdn.example.com/image.png",
+          "alt": "示例图片",
+          "width": 640,
+          "height": 480
+        }
+      }
+    ]
+  },
+  "annotations": []
+}
