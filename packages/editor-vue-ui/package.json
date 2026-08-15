@@ -1,0 +1,22 @@
+{
+  "name": "@kaelen/editor-vue-ui",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@kaelen/editor-ui-model": "workspace:*",
+    "@kaelen/editor-vue": "workspace:*"
+  },
+  "peerDependencies": {
+    "vue": ">=3.4"
+  },
+  "devDependencies": {
+    "@kaelen/editor-api": "workspace:*",
+    "vue": "^3.5.0"
+  }
+}
