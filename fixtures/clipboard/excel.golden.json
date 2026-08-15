@@ -1,0 +1,39 @@
+[
+  {
+    "type": "co_table",
+    "content": [
+      {
+        "type": "co_table_row",
+        "content": [
+          {
+            "type": "co_table_cell",
+            "attrs": { "colspan": 1, "rowspan": 1, "colwidth": null },
+            "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "姓名" }] }]
+          },
+          {
+            "type": "co_table_cell",
+            "attrs": { "colspan": 1, "rowspan": 1, "colwidth": null },
+            "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "备注" }] }]
+          }
+        ]
+      },
+      {
+        "type": "co_table_row",
+        "content": [
+          {
+            "type": "co_table_cell",
+            "attrs": { "colspan": 1, "rowspan": 1, "colwidth": null },
+            "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "张三" }] }]
+          },
+          {
+            "type": "co_table_cell",
+            "attrs": { "colspan": 1, "rowspan": 1, "colwidth": null },
+            "content": [
+              { "type": "paragraph", "content": [{ "type": "text", "text": "含制表符" }] }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]

@@ -4,7 +4,11 @@ import { type Command, EditorState, type Plugin, type Transaction } from "prosem
 import { Mapping } from "prosemirror-transform";
 import { type DirectEditorProps, EditorView } from "prosemirror-view";
 import { isBlockOfType, isCheckedTaskItem, isWithinNode } from "./block-commands";
-import { type ClipboardPayloadMeta, createClipboardPlugin } from "./clipboard";
+import {
+  type ClipboardNotice,
+  type ClipboardPayloadMeta,
+  createClipboardPlugin,
+} from "./clipboard";
 import { editorPlugins } from "./plugins";
 import { restoreDoc, sanitizeDoc } from "./unknown";
 
@@ -64,6 +68,7 @@ export class EditorSession {
     private readonly onDocumentTransaction: SessionTransactionListener = () => {},
     private readonly onCompositionChange: (composing: boolean) => void = () => {},
     private readonly extensions: readonly SessionExtension[] = [],
+    private readonly onClipboardNotice: (notice: ClipboardNotice) => void = () => {},
   ) {
     this.mode = mode;
     this.state = EditorState.create({
@@ -72,7 +77,7 @@ export class EditorSession {
       plugins: [
         ...editorPlugins(schema, () => this.isComposing),
         ...this.extensionPlugins(),
-        createClipboardPlugin({ getPayloadMeta: clipboardMeta }),
+        createClipboardPlugin({ getPayloadMeta: clipboardMeta, onNotice: onClipboardNotice }),
       ],
     });
     for (const extension of this.extensions) {
@@ -247,7 +252,10 @@ export class EditorSession {
       plugins: [
         ...editorPlugins(this.schema, () => this.isComposing),
         ...this.extensionPlugins(),
-        createClipboardPlugin({ getPayloadMeta: this.clipboardMeta }),
+        createClipboardPlugin({
+          getPayloadMeta: this.clipboardMeta,
+          onNotice: this.onClipboardNotice,
+        }),
       ],
     });
     this.view?.updateState(this.state);

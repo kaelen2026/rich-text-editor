@@ -1,0 +1,5 @@
+{
+  "text/html": "<!--StartFragment--><table><tbody><tr><td>姓名</td><td>备注</td></tr><tr><td>张三</td><td>含制表符</td></tr></tbody></table><!--EndFragment-->",
+  "text/plain": "姓名\t备注\r\n张三\t含制表符",
+  "application/x-company-editor+json": ""
+}

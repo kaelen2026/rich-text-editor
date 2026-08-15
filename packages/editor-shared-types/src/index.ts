@@ -166,6 +166,12 @@ export interface PluginError {
   message: string;
 }
 
+/** 剪贴板内容被安全或规模策略拒绝、截断时发给宿主的可展示提示。 */
+export interface ClipboardNotice {
+  code: "html-too-large" | "file-limit" | "image-too-large" | "word-file-image" | "table-limit";
+  message: string;
+}
+
 /**
  * 事件名。只列出当前真实会派发的事件；后续切片按需增补
  * （`patch` 等见方案 §9.4）。
@@ -175,7 +181,8 @@ export type EditorEventName =
   | "compositionChanged"
   | "documentDegraded"
   | "patch"
-  | "pluginError";
+  | "pluginError"
+  | "clipboardNotice";
 
 /** 事件载荷。没有载荷的事件为 `undefined`，`() => void` 形态的监听器照常可用。 */
 export interface EditorEventPayload {
@@ -183,6 +190,7 @@ export interface EditorEventPayload {
   compositionChanged: boolean;
   documentDegraded: undefined;
   pluginError: PluginError;
+  clipboardNotice: ClipboardNotice;
   /** 每个内容事务一条，可用于增量保存、协同和版本历史。 */
   patch: DocumentPatch;
 }

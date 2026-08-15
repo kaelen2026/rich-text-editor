@@ -1,6 +1,7 @@
 export {
   CLIPBOARD_ATTRIBUTE,
   CLIPBOARD_MIME,
+  type ClipboardNotice,
   type ClipboardPayload,
   type ClipboardPayloadMeta,
   type ClipboardPluginOptions,

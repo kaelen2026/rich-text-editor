@@ -12,6 +12,7 @@ import {
   validateEnvelope,
 } from "@kaelen/editor-schema";
 import type {
+  ClipboardNotice,
   CommandQuery,
   CommandResult,
   DocumentMigration,
@@ -167,6 +168,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       emit("compositionChanged", composing);
     },
     sessionExtensions,
+    (notice: ClipboardNotice) => emit("clipboardNotice", notice),
   );
 
   /**
