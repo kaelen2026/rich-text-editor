@@ -19,6 +19,7 @@ export {
   patchOpToSteps,
   stepToPatchOp,
 } from "./document-patch";
+export { parseExternalHTML } from "./external-html";
 export { buildSchema, type SchemaExtensions } from "./schema";
 export {
   EditorSession,

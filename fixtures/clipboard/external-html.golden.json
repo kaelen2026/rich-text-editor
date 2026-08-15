@@ -1,0 +1,21 @@
+[
+  {
+    "type": "heading",
+    "attrs": { "level": 4 },
+    "content": [{ "type": "text", "text": "外部标题" }]
+  },
+  {
+    "type": "paragraph",
+    "content": [
+      { "type": "text", "marks": [{ "type": "strong" }], "text": "保留" },
+      { "type": "text", "text": " " },
+      {
+        "type": "text",
+        "marks": [{ "type": "co_link", "attrs": { "href": "https://example.com/docs" } }],
+        "text": "链接"
+      },
+      { "type": "text", "text": " 危险" }
+    ]
+  },
+  { "type": "paragraph", "content": [{ "type": "text", "text": "表格降级" }] }
+]

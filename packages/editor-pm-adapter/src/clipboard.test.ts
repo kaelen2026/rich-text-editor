@@ -179,6 +179,44 @@ describe("内部 Slice 剪贴板协议", () => {
       plainView.destroy();
     });
   });
+
+  it("外部 HTML 通过 Schema 白名单解析，不能回落到默认粘贴", () => {
+    usingDOM((host) => {
+      const plugin = createClipboardPlugin({
+        getPayloadMeta: () => ({ schemaVersion: 1, plugins: {} }),
+      });
+      const doc = schema.node("doc", undefined, [paragraph("旧内容")]);
+      const view = new EditorView(host, {
+        state: EditorState.create({
+          schema,
+          doc,
+          selection: TextSelection.create(doc, 1, doc.content.size - 1),
+          plugins: [plugin],
+        }),
+      });
+      const data = new ClipboardDataStub();
+      data.setData(
+        "text/html",
+        '<h6 onclick="alert(1)">标题</h6><p><strong>正文</strong><img src="https://tracker.example/pixel"></p>',
+      );
+      data.setData("text/plain", "标题\n正文");
+      const event = clipboardEvent(data);
+
+      expect(plugin.props.handleDOMEvents?.paste?.call(plugin, view, event)).toBe(true);
+      expect(event.preventDefault).toHaveBeenCalledOnce();
+      expect(view.state.doc.toJSON()).toEqual({
+        type: "doc",
+        content: [
+          { type: "heading", attrs: { level: 4 }, content: [{ type: "text", text: "标题" }] },
+          {
+            type: "paragraph",
+            content: [{ type: "text", marks: [{ type: "strong" }], text: "正文" }],
+          },
+        ],
+      });
+      view.destroy();
+    });
+  });
 });
 
 class ClipboardDataStub {
