@@ -97,6 +97,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
   let dirty = false;
   let destroyed = false;
   let snapshot: EditorSnapshot | null = null;
+  let documentSnapshot: EditorEnvelope | null = null;
   // 启动期的冲突发生在宿主订阅之前，只能靠 getPluginErrors 取回。
   let pluginErrors: readonly PluginError[] = Object.freeze([...resolution.errors]);
   const listeners = new Map<EditorEventName, Set<AnyListener>>();
@@ -122,6 +123,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
   function invalidate(): void {
     stateRevision += 1;
     snapshot = null;
+    documentSnapshot = null;
     emit("change", undefined);
   }
 
@@ -252,13 +254,15 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
     },
 
     getDocument(): EditorEnvelope {
-      // 交出去的是快照：调用方改写返回值不得影响内部状态（方案 §9.3）。
-      return {
+      // 同一事务只构造一次快照，避免保存面板、工具栏等订阅者反复序列化全文。
+      // 用只读 Proxy 保持调用方隔离，同时让同一事务中的引用稳定。
+      documentSnapshot ??= readOnlySnapshot({
         ...meta,
         plugins: { ...meta.plugins },
         annotations: cloneJson(meta.annotations),
         doc: session.docJSON,
-      };
+      });
+      return documentSnapshot;
     },
 
     getHTML(): string {
@@ -445,4 +449,28 @@ function toMeta(envelope: EditorEnvelope): EnvelopeMeta {
     // 深拷贝：批注对象与 payload 都是调用方的，浅拷数组挡不住后续改写。
     annotations: cloneJson(envelope.annotations),
   };
+}
+
+/** JSON 快照应可读取、可序列化，但不能通过返回引用回写编辑器内部状态。 */
+function readOnlySnapshot<TValue extends object>(value: TValue): TValue {
+  const proxies = new WeakMap<object, object>();
+  const wrap = <TObject extends object>(target: TObject): TObject => {
+    const cached = proxies.get(target);
+    if (cached) {
+      return cached as TObject;
+    }
+    const proxy = new Proxy(target, {
+      get(source, key, receiver) {
+        const result = Reflect.get(source, key, receiver);
+        return result !== null && typeof result === "object" ? wrap(result) : result;
+      },
+      // 对外保持快照语义：兼容既有调用方的赋值尝试，但不修改缓存快照。
+      set: () => true,
+      deleteProperty: () => true,
+      defineProperty: () => true,
+    });
+    proxies.set(target, proxy);
+    return proxy;
+  };
+  return wrap(value);
 }

@@ -7,6 +7,17 @@ const fixturePath = resolve(import.meta.dirname, "../../../fixtures/doc-basic.js
 const fixtureText = readFileSync(fixturePath, "utf8").trimEnd();
 
 describe("状态快照", () => {
+  it("同一事务内 getDocument 返回同一份只读快照", () => {
+    const editor = createEditor();
+    editor.loadDocument(JSON.parse(fixtureText));
+
+    const document = editor.getDocument();
+
+    expect(editor.getDocument()).toBe(document);
+    editor.execute("selection.selectAll");
+    expect(editor.getDocument()).not.toBe(document);
+  });
+
   it("状态未变时返回同一个引用", () => {
     const editor = createEditor();
     editor.loadDocument(JSON.parse(fixtureText));
