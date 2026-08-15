@@ -1,6 +1,6 @@
 import type { EditorMode, NodeJSON, SelectionSnapshot } from "@kaelen/editor-shared-types";
 import { type MarkType, Node as ProseMirrorNode, type Schema } from "prosemirror-model";
-import { type Command, EditorState, type Transaction } from "prosemirror-state";
+import { type Command, EditorState, type Plugin, type Transaction } from "prosemirror-state";
 import { Mapping } from "prosemirror-transform";
 import { type DirectEditorProps, EditorView } from "prosemirror-view";
 import { isBlockOfType, isCheckedTaskItem, isWithinNode } from "./block-commands";
@@ -20,6 +20,24 @@ export type ProtectedOutcome<TValue> = { ok: true; value: TValue } | { ok: false
 export interface SelectionRange {
   anchor: number;
   head: number;
+}
+
+/**
+ * 可选能力向会话注册的 ProseMirror 插件。这个窄桥只在 PM 适配层和能力插件之间
+ * 流动，业务 API 与 runtime 的公共编辑器接口仍不暴露 ProseMirror 状态。
+ */
+export interface SessionExtension {
+  plugins(schema: Schema): readonly Plugin[];
+  bind?(bridge: SessionBridge): void;
+  unmount?(): void;
+  destroy?(): void;
+}
+
+/** 能力插件需要的最小会话能力，异步结果可通过它安全回到唯一事务入口。 */
+export interface SessionBridge {
+  readonly schema: Schema;
+  getState(): EditorState;
+  dispatch(transaction: Transaction): void;
 }
 
 /**
@@ -45,6 +63,7 @@ export class EditorSession {
     }),
     private readonly onDocumentTransaction: SessionTransactionListener = () => {},
     private readonly onCompositionChange: (composing: boolean) => void = () => {},
+    private readonly extensions: readonly SessionExtension[] = [],
   ) {
     this.mode = mode;
     this.state = EditorState.create({
@@ -52,9 +71,21 @@ export class EditorSession {
       doc: ProseMirrorNode.fromJSON(schema, sanitizeDoc(schema, doc).doc),
       plugins: [
         ...editorPlugins(schema, () => this.isComposing),
+        ...this.extensionPlugins(),
         createClipboardPlugin({ getPayloadMeta: clipboardMeta }),
       ],
     });
+    for (const extension of this.extensions) {
+      extension.bind?.({
+        schema: this.schema,
+        getState: () => this.state,
+        dispatch: (transaction) => this.dispatch(transaction),
+      });
+    }
+  }
+
+  private extensionPlugins(): readonly Plugin[] {
+    return this.extensions.flatMap((extension) => extension.plugins(this.schema));
   }
 
   get docJSON(): NodeJSON {
@@ -181,6 +212,9 @@ export class EditorSession {
   unmount(): void {
     this.view?.destroy();
     this.view = null;
+    for (const extension of this.extensions) {
+      extension.unmount?.();
+    }
   }
 
   /** 实例销毁时取消兜底计时器，避免已销毁 runtime 仍收到组合态通知。 */
@@ -192,6 +226,9 @@ export class EditorSession {
     }
     this.pendingTransactions.length = 0;
     this.isComposing = false;
+    for (const extension of this.extensions) {
+      extension.destroy?.();
+    }
   }
 
   focus(): void {
@@ -209,6 +246,7 @@ export class EditorSession {
       doc: ProseMirrorNode.fromJSON(this.schema, sanitized),
       plugins: [
         ...editorPlugins(this.schema, () => this.isComposing),
+        ...this.extensionPlugins(),
         createClipboardPlugin({ getPayloadMeta: this.clipboardMeta }),
       ],
     });
@@ -249,7 +287,8 @@ export class EditorSession {
     return isCheckedTaskItem(this.state);
   }
 
-  private dispatch(transaction: Transaction): void {
+  /** 能力插件的异步回填也必须汇聚到本入口，才能遵守组合态和事件契约。 */
+  dispatch(transaction: Transaction): void {
     if (this.isComposing && transaction.docChanged) {
       this.pendingTransactions.push({ transaction, mapping: new Mapping() });
       return;

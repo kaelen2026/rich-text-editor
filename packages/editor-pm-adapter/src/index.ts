@@ -25,5 +25,7 @@ export {
   EditorSession,
   type ProtectedOutcome,
   type SelectionRange,
+  type SessionBridge,
+  type SessionExtension,
 } from "./session";
 export { restoreDoc, type SanitizeResult, sanitizeDoc } from "./unknown";

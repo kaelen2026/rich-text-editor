@@ -1,0 +1,21 @@
+.ProseMirror .co-image-upload-indicator {
+  display: inline-block;
+  margin: 0.35rem 0;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  background: #e8f0fe;
+  color: #174ea6;
+  font-size: 0.875rem;
+}
+
+.ProseMirror .co-image-upload-indicator.co-image-failed {
+  background: #fce8e6;
+  color: #b3261e;
+}
+
+.ProseMirror img.co-image-uploading {
+  min-width: 6rem;
+  min-height: 3rem;
+  opacity: 0.45;
+  outline: 2px dashed #4285f4;
+}

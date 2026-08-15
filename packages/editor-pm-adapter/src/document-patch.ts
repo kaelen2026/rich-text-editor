@@ -23,6 +23,8 @@ export type PatchApplyResult =
 
 /** 把 PM 的一步转换成平台 PatchOp；复杂结构步骤由事务转换器回退为整篇 replace。 */
 export function stepToPatchOp(step: Step): PatchOp | null {
+  // 复杂第三方 transform 即使构造出异常 replace step，也应回退为整篇 patch，
+  // 而不是在增量保存时抛错。
   if (step instanceof ReplaceStep && step.slice instanceof Slice) {
     return { type: "replace", from: step.from, to: step.to, slice: sliceToJSON(step.slice) };
   }
@@ -145,6 +147,7 @@ function contentSlice(document: ProseMirrorNode): SliceJSON {
 }
 
 function sliceToJSON(slice: Slice): SliceJSON {
+  // ProseMirror 将 Slice.empty 编码为 null；平台 Patch 始终使用显式空数组。
   const json = slice.toJSON() as {
     content?: NodeJSON[];
     openStart?: number;

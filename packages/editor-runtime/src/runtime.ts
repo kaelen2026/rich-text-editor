@@ -82,6 +82,9 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
   const schema = buildSchema({ nodes: resolution.nodes, marks: resolution.marks });
   const initial = createEmptyEnvelope();
   const commands = resolution.commands;
+  const sessionExtensions = resolution.enabled.flatMap(
+    (plugin) => plugin.createSessionExtensions?.() ?? [],
+  );
   const breaker = new PluginBreaker();
 
   let meta = toMeta(initial);
@@ -163,6 +166,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       invalidate();
       emit("compositionChanged", composing);
     },
+    sessionExtensions,
   );
 
   /**
