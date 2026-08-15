@@ -1,5 +1,6 @@
 import { createEditor, type EditorOptions, type RichEditor } from "@kaelen/editor-api";
 import { createLinkPlugin } from "@kaelen/editor-plugin-link";
+import { applyDocumentPatch, buildSchema } from "@kaelen/editor-pm-adapter";
 import {
   EditorContent,
   EditorProvider,
@@ -9,8 +10,8 @@ import {
   usePluginErrors,
 } from "@kaelen/editor-react";
 import { createEmptyEnvelope, stringifyEnvelope } from "@kaelen/editor-schema";
-import type { EditorEnvelope, EditorMode } from "@kaelen/editor-shared-types";
-import { useState } from "react";
+import type { DocumentPatch, EditorEnvelope, EditorMode } from "@kaelen/editor-shared-types";
+import { useEffect, useState } from "react";
 
 const STORAGE_KEY = "playground.document";
 
@@ -107,6 +108,7 @@ interface Boot {
   editor: RichEditor;
   unknownNodes: string[];
   faulty: boolean;
+  baseDocument: EditorEnvelope;
 }
 
 function bootEditor(faulty: boolean, document: EditorEnvelope): Boot {
@@ -114,7 +116,7 @@ function bootEditor(faulty: boolean, document: EditorEnvelope): Boot {
     plugins: faulty ? [createLinkPlugin(), ...FAULTY_PLUGINS] : [createLinkPlugin()],
   });
   const result = editor.loadDocument(document);
-  return { editor, unknownNodes: result.unknownNodes, faulty };
+  return { editor, unknownNodes: result.unknownNodes, faulty, baseDocument: document };
 }
 
 function CommandButton({
@@ -272,10 +274,62 @@ function LinkButton() {
   );
 }
 
+/** 只消费 patch 事件：面板不调用 getDocument()，避免每次变更都全文序列化。 */
+function PatchPanel({ baseDocument }: { baseDocument: EditorEnvelope }) {
+  const editor = useEditor();
+  const [patches, setPatches] = useState<DocumentPatch[]>([]);
+  const [replay, setReplay] = useState<string | null>(null);
+
+  useEffect(() => {
+    setPatches([]);
+    setReplay(null);
+    return editor.subscribe("patch", (patch) => setPatches((current) => [...current, patch]));
+  }, [editor]);
+
+  function replayAll() {
+    let document = baseDocument.doc;
+    let revision = 0;
+    for (const patch of patches) {
+      const result = applyDocumentPatch(buildSchema(), document, patch, revision);
+      if (!result.ok) {
+        setReplay(`重放失败：${result.reason}`);
+        return;
+      }
+      document = result.document;
+      revision = result.revision;
+    }
+    setReplay(
+      JSON.stringify({
+        ok: JSON.stringify(document) === JSON.stringify(editor.getDocument().doc),
+        revision,
+        document,
+      }),
+    );
+  }
+
+  return (
+    <section className="patch-panel">
+      <div className="patch-heading">
+        <strong>DocumentPatch 增量流</strong>
+        <button type="button" onClick={replayAll} disabled={patches.length === 0}>
+          从初始文档重放全部 patch
+        </button>
+      </div>
+      <p>
+        {patches.length === 0
+          ? "编辑后会显示增量，不会输出全文。"
+          : `已捕获 ${patches.length} 条 patch。`}
+      </p>
+      {patches.length > 0 ? <pre>{JSON.stringify(patches, null, 2)}</pre> : null}
+      {replay ? <pre>{replay}</pre> : null}
+    </section>
+  );
+}
+
 export function App() {
   const [boot, setBoot] = useState<Boot>(() => bootEditor(false, readStoredDocument()));
   const [saved, setSaved] = useState<string | null>(null);
-  const { editor, unknownNodes, faulty } = boot;
+  const { editor, unknownNodes, faulty, baseDocument } = boot;
 
   function save() {
     const text = stringifyEnvelope(editor.getDocument());
@@ -287,7 +341,7 @@ export function App() {
 
   function loadSample() {
     const result = editor.loadDocument(UNKNOWN_SAMPLE);
-    setBoot({ ...boot, unknownNodes: result.unknownNodes });
+    setBoot({ ...boot, unknownNodes: result.unknownNodes, baseDocument: UNKNOWN_SAMPLE });
     setSaved(null);
   }
 
@@ -326,6 +380,7 @@ export function App() {
       <div className="surface">
         <EditorContent />
       </div>
+      <PatchPanel baseDocument={baseDocument} />
       {saved ? <pre>{saved}</pre> : null}
     </EditorProvider>
   );
