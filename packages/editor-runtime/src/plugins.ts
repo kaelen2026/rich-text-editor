@@ -1,4 +1,8 @@
-import { coreCommands, type SessionCommand } from "@kaelen/editor-pm-adapter";
+import {
+  coreCommands,
+  type SessionCommand,
+  type SessionExtension,
+} from "@kaelen/editor-pm-adapter";
 import { coreMarks, coreNodes } from "@kaelen/editor-schema";
 import type {
   CoreMarkSpec,
@@ -31,6 +35,11 @@ export interface EditorPlugin {
   dependsOn?: string[];
   extendSchema?(schema: SchemaBuilder): void;
   registerCommands?(commands: CommandRegistry): void;
+  /**
+   * 仅供需要 Decoration、位置 mapping 等 PM 状态的能力使用。桥接类型止于
+   * adapter / 插件层，业务侧 API 不会获得 ProseMirror 对象。
+   */
+  createSessionExtensions?(): readonly SessionExtension[];
 }
 
 /** 已注册的命令及其归属。核心命令没有 `owner`，因此永远不会被熔断。 */

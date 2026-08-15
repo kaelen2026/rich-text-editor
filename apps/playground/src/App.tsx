@@ -1,4 +1,5 @@
 import { createEditor, type EditorOptions, type RichEditor } from "@kaelen/editor-api";
+import { createImagePlugin } from "@kaelen/editor-plugin-image";
 import { createLinkPlugin } from "@kaelen/editor-plugin-link";
 import { createTablePlugin } from "@kaelen/editor-plugin-table";
 import { applyDocumentPatch, buildSchema } from "@kaelen/editor-pm-adapter";
@@ -12,9 +13,29 @@ import {
 } from "@kaelen/editor-react";
 import { createEmptyEnvelope, stringifyEnvelope } from "@kaelen/editor-schema";
 import type { DocumentPatch, EditorEnvelope, EditorMode } from "@kaelen/editor-shared-types";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const STORAGE_KEY = "playground.document";
+
+/** 仅用于 playground 的可取消上传模拟器；生产宿主传入自己的对象存储适配器。 */
+const playgroundUploader = {
+  upload(file: File, { signal }: { uploadId: string; signal: AbortSignal }) {
+    return new Promise<{ url: string; alt: string }>((resolve, reject) => {
+      const timer = window.setTimeout(
+        () => resolve({ url: URL.createObjectURL(file), alt: file.name }),
+        900,
+      );
+      signal.addEventListener(
+        "abort",
+        () => {
+          window.clearTimeout(timer);
+          reject(new DOMException("上传已取消", "AbortError"));
+        },
+        { once: true },
+      );
+    });
+  },
+};
 
 type InstalledPlugins = NonNullable<EditorOptions["plugins"]>;
 
@@ -115,8 +136,17 @@ interface Boot {
 function bootEditor(faulty: boolean, document: EditorEnvelope): Boot {
   const editor = createEditor({
     plugins: faulty
-      ? [createLinkPlugin(), createTablePlugin(), ...FAULTY_PLUGINS]
-      : [createLinkPlugin(), createTablePlugin()],
+      ? [
+          createLinkPlugin(),
+          createTablePlugin(),
+          createImagePlugin({ uploader: playgroundUploader }),
+          ...FAULTY_PLUGINS,
+        ]
+      : [
+          createLinkPlugin(),
+          createTablePlugin(),
+          createImagePlugin({ uploader: playgroundUploader }),
+        ],
   });
   const result = editor.loadDocument(document);
   return { editor, unknownNodes: result.unknownNodes, faulty, baseDocument: document };
@@ -198,6 +228,7 @@ function Toolbar({
   const dirty = useEditorSelector((snapshot) => snapshot.dirty);
   const revision = useEditorSelector((snapshot) => snapshot.revision);
   const composing = useEditorSelector((snapshot) => snapshot.composing);
+  const imageInput = useRef<HTMLInputElement>(null);
 
   return (
     <>
@@ -232,6 +263,28 @@ function Toolbar({
         <CommandButton command="format.code" label="<>" title="Cmd/Ctrl+E" />
         <LinkButton />
         <CommandButton command="link.unset" label="取消链接" />
+        <button
+          type="button"
+          onMouseDown={(event) => {
+            event.preventDefault();
+            imageInput.current?.click();
+          }}
+        >
+          图片
+        </button>
+        <input
+          ref={imageInput}
+          type="file"
+          accept="image/*"
+          hidden
+          onChange={(event) => {
+            const file = event.currentTarget.files?.[0];
+            if (file) {
+              editor.execute("image.insert", { file });
+            }
+            event.currentTarget.value = "";
+          }}
+        />
         <CommandButton command="history.undo" label="撤销" title="Cmd/Ctrl+Z" />
         <CommandButton command="history.redo" label="重做" title="Cmd/Ctrl+Shift+Z" />
       </div>
@@ -372,10 +425,10 @@ export function App() {
 
   return (
     <EditorProvider editor={editor}>
-      <h1>富文本编辑器 · 输入规则、组合态、内部复制粘贴与插件熔断</h1>
+      <h1>富文本编辑器 · 输入规则、图片上传、组合态与插件熔断</h1>
       <p className="hint">
         {
-          "标题、引用、列表、待办、代码块、分隔线都在工具栏上，按钮的 tooltip 是对应快捷键；列表里 Tab / Shift+Tab 升降级，Shift+Enter 软换行。输入 #、-、1.、> 或 ``` 加空格可触发结构规则；中文/日文等输入法组合期间工具栏会暂停，并在候选词确认后恢复。复制会把可还原的 Slice 写入 HTML 的 data-co-slice，粘贴时优先恢复它；Cmd/Ctrl+Shift+V 与代码块内粘贴始终只取纯文本。切换状态可以看只读态与禁用态的区别；点保存写入 localStorage，刷新页面内容仍在。"
+          "标题、引用、列表、待办、代码块、分隔线都在工具栏上，按钮的 tooltip 是对应快捷键；列表里 Tab / Shift+Tab 升降级，Shift+Enter 软换行。点“图片”选择本地文件，或把图片拖入/粘贴到编辑区：上传中会显示占位，完成后回填；上传期间继续编辑，目标位置会随事务迁移。复制上传中图片不会复制运行时 uploadId。输入 #、-、1.、> 或 ``` 加空格可触发结构规则；中文/日文等输入法组合期间工具栏会暂停，并在候选词确认后恢复。复制会把可还原的 Slice 写入 HTML 的 data-co-slice，粘贴时优先恢复它；Cmd/Ctrl+Shift+V 与代码块内粘贴始终只取纯文本。切换状态可以看只读态与禁用态的区别；点保存写入 localStorage，刷新页面内容仍在。"
         }
       </p>
       <label className="switch">

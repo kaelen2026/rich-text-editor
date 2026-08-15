@@ -56,6 +56,9 @@ importers:
       '@kaelen/editor-api':
         specifier: workspace:*
         version: link:../../packages/editor-api
+      '@kaelen/editor-plugin-image':
+        specifier: workspace:*
+        version: link:../../packages/editor-plugin-image
       '@kaelen/editor-plugin-link':
         specifier: workspace:*
         version: link:../../packages/editor-plugin-link
@@ -99,6 +102,25 @@ importers:
       '@kaelen/editor-shared-types':
         specifier: workspace:*
         version: link:../editor-shared-types
+
+  packages/editor-plugin-image:
+    dependencies:
+      '@kaelen/editor-pm-adapter':
+        specifier: workspace:*
+        version: link:../editor-pm-adapter
+      '@kaelen/editor-runtime':
+        specifier: workspace:*
+        version: link:../editor-runtime
+      prosemirror-state:
+        specifier: ^1.4.3
+        version: 1.4.4
+      prosemirror-view:
+        specifier: ^1.41.4
+        version: 1.42.2
+    devDependencies:
+      '@kaelen/editor-api':
+        specifier: workspace:*
+        version: link:../editor-api
 
   packages/editor-plugin-link:
     dependencies:

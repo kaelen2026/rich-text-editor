@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@kaelen/editor-api": "workspace:*",
+    "@kaelen/editor-plugin-image": "workspace:*",
     "@kaelen/editor-plugin-link": "workspace:*",
     "@kaelen/editor-plugin-table": "workspace:*",
     "@kaelen/editor-pm-adapter": "workspace:*",
