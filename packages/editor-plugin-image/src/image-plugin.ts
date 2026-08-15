@@ -104,7 +104,7 @@ class ImageUploadController implements SessionExtension {
       if (!apply) {
         return { ok: true };
       }
-      this.insert(file);
+      this.insert(file, altFrom(input));
       return { ok: true };
     },
     active: () => false,
@@ -215,7 +215,7 @@ class ImageUploadController implements SessionExtension {
     this.bridge = undefined;
   }
 
-  private insert(file: File): void {
+  private insert(file: File, alt = file.name): void {
     const bridge = this.bridge;
     if (!bridge) {
       return;
@@ -227,9 +227,9 @@ class ImageUploadController implements SessionExtension {
     const uploadId = this.nextUploadId();
     const state = bridge.getState();
     const transaction = state.tr.replaceSelectionWith(
-      nodeType.create({ src: "", alt: file.name, width: null, height: null }),
+      nodeType.create({ src: "", alt, width: null, height: null }),
     );
-    const pos = insertedImagePosition(transaction, state.selection.from, file.name);
+    const pos = insertedImagePosition(transaction, state.selection.from, alt);
     transaction.setMeta(imageUploadKey, {
       kind: "start",
       record: { uploadId, pos, status: "uploading" },
@@ -409,6 +409,14 @@ function fileFrom(input: unknown): File | undefined {
     : undefined;
 }
 
+function altFrom(input: unknown): string | undefined {
+  if (!input || typeof input !== "object" || !("alt" in input)) {
+    return undefined;
+  }
+  const alt = (input as { alt: unknown }).alt;
+  return typeof alt === "string" ? alt : undefined;
+}
+
 function uploadIdFrom(input: unknown): string | undefined {
   if (!input || typeof input !== "object" || !("uploadId" in input)) {
     return undefined;
@@ -440,6 +448,8 @@ function uploadIndicator(record: ImageUploadRecord): HTMLElement {
   const indicator = document.createElement("span");
   indicator.className = `co-image-upload-indicator co-image-${record.status}`;
   indicator.setAttribute("contenteditable", "false");
+  indicator.setAttribute("aria-live", "polite");
+  indicator.setAttribute("role", "status");
   indicator.dataset.uploadStatus = record.status;
   indicator.textContent =
     record.status === "uploading" ? "图片上传中…" : `图片上传失败：${record.error ?? "请重试"}`;

@@ -1,3 +1,61 @@
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-block: 0.75rem;
+}
+
+.editor-toolbar-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  min-inline-size: 0;
+  margin: 0;
+  padding-block: 0;
+  padding-inline-end: 0.5rem;
+  border: 0;
+  border-inline-end: 1px solid #6b7280;
+}
+
+.editor-toolbar-group:last-child {
+  border-inline-end: 0;
+}
+
+button,
+select {
+  min-height: 2.25rem;
+  border: 1px solid #4b5563;
+  border-radius: 0.25rem;
+  background: #ffffff;
+  color: #1f2937;
+  font: inherit;
+}
+
+button[data-active="true"] {
+  border-color: #0f4c81;
+  background: #0f4c81;
+  color: #ffffff;
+}
+
+button:disabled {
+  border-color: #9ca3af;
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
+button:focus-visible,
+select:focus-visible,
+.ProseMirror:focus-visible {
+  outline: 3px solid #b45309;
+  outline-offset: 2px;
+}
+
+.surface {
+  min-height: 12rem;
+  padding: 0.75rem;
+  border: 1px solid #4b5563;
+}
+
 .ProseMirror .co-image-upload-indicator {
   display: inline-block;
   margin: 0.35rem 0;

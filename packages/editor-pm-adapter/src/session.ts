@@ -128,7 +128,11 @@ export class EditorSession {
     return {
       editable: () => this.mode === "edit",
       attributes: () => {
-        const attributes: Record<string, string> = { "data-mode": this.mode };
+        const attributes: Record<string, string> = {
+          "data-mode": this.mode,
+          role: "textbox",
+          "aria-multiline": "true",
+        };
         if (this.mode === "readonly") {
           attributes.tabindex = "0";
           attributes["aria-readonly"] = "true";

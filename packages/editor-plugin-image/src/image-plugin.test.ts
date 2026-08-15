@@ -84,6 +84,28 @@ describe("图片上传插件", () => {
     expect(editor.getDocument().doc.content?.some((node) => node.type === "co_image")).toBe(false);
   });
 
+  it("保留工具栏提供的替代文本，直到上传器返回更具体的文本", () => {
+    const editor = createEditor({
+      plugins: [
+        createImagePlugin({
+          uploader: { upload: vi.fn((): Promise<{ url: string }> => new Promise(() => {})) },
+        }),
+      ],
+    });
+    editor.loadDocument(document);
+
+    editor.execute("image.insert", {
+      file: new File(["image"], "diagram.png", { type: "image/png" }),
+      alt: "发布流程图",
+    });
+
+    expect(
+      editor.getDocument().doc.content?.find((node) => node.type === "co_image"),
+    ).toMatchObject({
+      attrs: { alt: "发布流程图" },
+    });
+  });
+
   it("删除上传目标后丢弃完成的资产，并在卸载时取消上传", async () => {
     const upload = deferred<{ url: string }>();
     const discard = vi.fn();
