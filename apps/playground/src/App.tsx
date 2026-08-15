@@ -8,7 +8,7 @@ import {
   useEditorSelector,
 } from "@kaelen/editor-react";
 import { createEmptyEnvelope, stringifyEnvelope } from "@kaelen/editor-schema";
-import type { EditorEnvelope } from "@kaelen/editor-shared-types";
+import type { EditorEnvelope, EditorMode } from "@kaelen/editor-shared-types";
 import { useRef, useState } from "react";
 
 const STORAGE_KEY = "playground.document";
@@ -62,22 +62,48 @@ function readStoredDocument(): EditorEnvelope {
   }
 }
 
-function CommandButton({ command, label }: { command: string; label: string }) {
+function CommandButton({
+  command,
+  label,
+  input,
+  title,
+}: {
+  command: string;
+  label: string;
+  input?: unknown;
+  title?: string;
+}) {
   const editor = useEditor();
-  const { enabled, active } = useCommandQuery(command);
+  const { enabled, active } = useCommandQuery(command, input);
   return (
     <button
       type="button"
+      title={title}
       data-active={active}
       disabled={!enabled}
       onMouseDown={(event) => {
         // 保住选区：按下时不让焦点离开编辑区。
         event.preventDefault();
-        editor.execute(command);
+        editor.execute(command, input);
       }}
     >
       {label}
     </button>
+  );
+}
+
+function ModeSwitch() {
+  const editor = useEditor();
+  const mode = useEditorSelector((snapshot) => snapshot.mode);
+  return (
+    <label className="mode">
+      状态
+      <select value={mode} onChange={(event) => editor.setMode(event.target.value as EditorMode)}>
+        <option value="edit">编辑</option>
+        <option value="readonly">只读（可选中可复制）</option>
+        <option value="disabled">禁用（不可聚焦）</option>
+      </select>
+    </label>
   );
 }
 
@@ -86,23 +112,54 @@ function Toolbar({ onSave, onLoadSample }: { onSave: () => void; onLoadSample: (
   const revision = useEditorSelector((snapshot) => snapshot.revision);
 
   return (
-    <div className="toolbar">
-      <CommandButton command="format.bold" label="B" />
-      <CommandButton command="format.italic" label="I" />
-      <CommandButton command="history.undo" label="撤销" />
-      <CommandButton command="history.redo" label="重做" />
-      <LinkButton />
-      <CommandButton command="link.unset" label="取消链接" />
-      <button type="button" onClick={onSave}>
-        保存
-      </button>
-      <button type="button" onClick={onLoadSample}>
-        装载含未知节点的示例
-      </button>
-      <span className="status">
-        修订号 {revision} · {dirty ? "未保存" : "已保存"}
-      </span>
-    </div>
+    <>
+      <div className="toolbar">
+        <CommandButton command="block.setParagraph" label="正文" title="Cmd/Ctrl+Alt+0" />
+        {[1, 2, 3, 4].map((level) => (
+          <CommandButton
+            key={level}
+            command="block.setHeading"
+            input={{ level }}
+            label={`H${level}`}
+            title={`Cmd/Ctrl+Alt+${level}`}
+          />
+        ))}
+        <CommandButton command="block.toggleBlockquote" label="引用" title="Cmd/Ctrl+Shift+>" />
+        <CommandButton command="block.toggleCodeBlock" label="代码块" title="Cmd/Ctrl+Alt+C" />
+        <CommandButton command="block.insertHorizontalRule" label="分隔线" title="Cmd/Ctrl+Alt+R" />
+      </div>
+      <div className="toolbar">
+        <CommandButton command="list.toggleBullet" label="• 列表" title="Cmd/Ctrl+Shift+8" />
+        <CommandButton command="list.toggleOrdered" label="1. 列表" title="Cmd/Ctrl+Shift+9" />
+        <CommandButton command="list.toggleTask" label="☐ 待办" title="Cmd/Ctrl+Shift+7" />
+        <CommandButton command="list.toggleChecked" label="勾选" />
+        <CommandButton command="list.indent" label="缩进" title="Tab" />
+        <CommandButton command="list.outdent" label="提升" title="Shift+Tab" />
+      </div>
+      <div className="toolbar">
+        <CommandButton command="format.bold" label="B" title="Cmd/Ctrl+B" />
+        <CommandButton command="format.italic" label="I" title="Cmd/Ctrl+I" />
+        <CommandButton command="format.underline" label="U" title="Cmd/Ctrl+U" />
+        <CommandButton command="format.strikethrough" label="S" title="Cmd/Ctrl+Shift+X" />
+        <CommandButton command="format.code" label="<>" title="Cmd/Ctrl+E" />
+        <LinkButton />
+        <CommandButton command="link.unset" label="取消链接" />
+        <CommandButton command="history.undo" label="撤销" title="Cmd/Ctrl+Z" />
+        <CommandButton command="history.redo" label="重做" title="Cmd/Ctrl+Shift+Z" />
+      </div>
+      <div className="toolbar">
+        <ModeSwitch />
+        <button type="button" onClick={onSave}>
+          保存
+        </button>
+        <button type="button" onClick={onLoadSample}>
+          装载含未知节点的示例
+        </button>
+        <span className="status">
+          修订号 {revision} · {dirty ? "未保存" : "已保存"}
+        </span>
+      </div>
+    </>
   );
 }
 
@@ -155,10 +212,11 @@ export function App() {
 
   return (
     <EditorProvider editor={editor}>
-      <h1>富文本编辑器 · 插件运行时与链接</h1>
+      <h1>富文本编辑器 · 块级结构</h1>
       <p className="hint">
-        输入文字，用 Cmd/Ctrl+B 加粗、Cmd/Ctrl+I 斜体、Cmd/Ctrl+Z 撤销；选中文本后可添加安全链接。
-        点"保存"写入 localStorage，刷新页面内容仍在。
+        标题、引用、列表、待办、代码块、分隔线都在工具栏上，按钮的 tooltip 是对应快捷键； 列表里 Tab
+        / Shift+Tab 升降级，Shift+Enter 软换行。切换"状态"可以看只读态与禁用态的区别。 点"保存"写入
+        localStorage，刷新页面内容仍在。
       </p>
       {unknownNodes.length > 0 ? (
         <p className="warning">

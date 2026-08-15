@@ -4,6 +4,7 @@ import type {
   CommandResult,
   EditorEnvelope,
   EditorEventName,
+  EditorMode,
   EditorSnapshot,
   LoadResult,
   NodeJSON,
@@ -25,8 +26,15 @@ export interface RichEditor {
   getDocument(): EditorEnvelope;
 
   execute(command: string, input?: unknown): CommandResult;
-  /** 工具栏所需状态：能否执行、当前是否生效。 */
-  queryCommand(command: string): CommandQuery;
+  /**
+   * 工具栏所需状态：能否执行、当前是否生效。
+   * 带参数的命令（如标题层级）要把同一份参数传进来，否则问的不是同一件事。
+   */
+  queryCommand(command: string, input?: unknown): CommandQuery;
+
+  /** 编辑态 / 只读态 / 禁用态。三者语义不同，见 `EditorMode`（方案 §4.1）。 */
+  getMode(): EditorMode;
+  setMode(mode: EditorMode): void;
 
   /** 引用稳定的状态快照，供 useSyncExternalStore / Vue computed 使用。 */
   getSnapshot(): EditorSnapshot;
@@ -57,7 +65,9 @@ export function createEditor(options: EditorOptions = {}): RichEditor {
     loadDocument: (input) => runtime.loadDocument(input),
     getDocument: () => runtime.getDocument(),
     execute: (command, input) => runtime.execute(command, input),
-    queryCommand: (command) => runtime.queryCommand(command),
+    queryCommand: (command, input) => runtime.queryCommand(command, input),
+    getMode: () => runtime.getMode(),
+    setMode: (mode) => runtime.setMode(mode),
     getSnapshot: () => runtime.getSnapshot(),
     subscribe: (event, listener) => runtime.subscribe(event, listener),
     isDirty: () => runtime.isDirty(),

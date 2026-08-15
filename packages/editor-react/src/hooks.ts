@@ -47,9 +47,12 @@ export function useEditorSelector<TSelected>(
   return useSyncExternalStore(subscribe, getSelected, getSelected);
 }
 
-/** 工具栏按钮所需的状态。不读文档，只查命令。 */
-export function useCommandQuery(command: string): CommandQuery {
+/**
+ * 工具栏按钮所需的状态。不读文档，只查命令。
+ * 带参数的命令（如 `block.setHeading` 的层级）把参数一并传进来。
+ */
+export function useCommandQuery(command: string, input?: unknown): CommandQuery {
   const editor = useEditor();
   useEditorSnapshot();
-  return editor.queryCommand(command);
+  return editor.queryCommand(command, input);
 }

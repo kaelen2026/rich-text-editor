@@ -106,7 +106,8 @@ graph TD
 
 ### S6. 块级结构 · AFK
 
-- **动什么**：冻结核心集其余块节点（`heading` h1–h4、`blockquote`、`horizontal_rule`、`bullet_list`/`ordered_list`/`list_item`、`task_list`/`task_item`、`code_block`、`hard_break`）+ 对应命令与快捷键 + 工具栏按钮 + 只读/禁用三态。
+- **动什么**：冻结核心集其余块节点（`heading` h1–h4、`blockquote`、`horizontal_rule`、`bullet_list`/`ordered_list`/`list_item`、`task_list`/`task_item`、`code_block`、`hard_break`）**与其余核心标记**（`underline`、`strikethrough`、`code`）+ 对应命令与快捷键 + 工具栏按钮 + 只读/禁用三态。
+- **为什么标记也在这片**：§4 的不可回滚边界写明"冻结核心节点/标记名"定型于 S1、S6，而后续没有任何一片认领这三个标记；漏在这里就等于让冻结集在有真实数据之后才补全，那时改名等于全量迁移。
 - **演示**：段落转 h1–h4、无序/有序/待办列表（含嵌套与升降级）、引用、分隔线、代码块；每种转换的撤销重做都正确。
 - **验证**：单测覆盖每种转换 + 每种转换的 undo/redo + 列表嵌套边界；playground 手动走一遍。
 - **回滚**：单 commit；同 S2 的落库边界。
