@@ -1,4 +1,9 @@
-import { buildSchema, EditorSession, type SessionCommand } from "@kaelen/editor-pm-adapter";
+import {
+  buildSchema,
+  documentPatchFromTransaction,
+  EditorSession,
+  type SessionCommand,
+} from "@kaelen/editor-pm-adapter";
 import {
   assertMigrationsDeclareReversibility,
   cloneJson,
@@ -10,6 +15,7 @@ import type {
   CommandQuery,
   CommandResult,
   DocumentMigration,
+  DocumentPatch,
   EditorEnvelope,
   EditorEventName,
   EditorEventPayload,
@@ -19,6 +25,7 @@ import type {
   NodeJSON,
   PluginError,
 } from "@kaelen/editor-shared-types";
+import { type AutoSaveOptions, AutoSaveScheduler } from "./autosave";
 import { PluginBreaker } from "./breaker";
 import { describeError, type EditorPlugin, resolvePlugins } from "./plugins";
 
@@ -59,6 +66,8 @@ export interface RuntimeOptions {
   migrations?: DocumentMigration[];
   /** 初始三态，默认可编辑（方案 §4.1）。 */
   mode?: EditorMode;
+  /** 增量自动保存：2 秒空闲或 50 个 patch 后提交。 */
+  autoSave?: AutoSaveOptions;
 }
 
 /** 事件载荷在订阅处收敛为具体类型，这里只需要一个能装下所有监听器的形状。 */
@@ -82,6 +91,15 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
   // 启动期的冲突发生在宿主订阅之前，只能靠 getPluginErrors 取回。
   let pluginErrors: readonly PluginError[] = Object.freeze([...resolution.errors]);
   const listeners = new Map<EditorEventName, Set<AnyListener>>();
+  const autoSave = options.autoSave
+    ? new AutoSaveScheduler(options.autoSave, (savedRevision) => {
+        if (savedRevision === revision && dirty) {
+          dirty = false;
+          invalidate();
+        }
+      })
+    : undefined;
+  let pendingPatch: DocumentPatch | undefined;
 
   function emit<TEvent extends EditorEventName>(
     event: TEvent,
@@ -125,11 +143,20 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       if (docChanged) {
         revision += 1;
         dirty = true;
+        const patch = pendingPatch;
+        pendingPatch = undefined;
+        if (patch) {
+          emit("patch", patch);
+          autoSave?.add(patch);
+        }
       }
       invalidate();
     },
     options.mode ?? "edit",
     () => ({ schemaVersion: meta.schemaVersion, plugins: { ...meta.plugins } }),
+    (transaction) => {
+      pendingPatch = documentPatchFromTransaction(transaction, revision, revision + 1);
+    },
   );
 
   /**
@@ -366,6 +393,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
     /** 销毁实例。与 unmount 正交：销毁由创建者负责，卸载由框架适配层负责。 */
     destroy(): void {
       session.unmount();
+      autoSave?.destroy();
       destroyed = true;
       invalidate();
     },
