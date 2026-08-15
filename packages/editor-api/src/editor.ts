@@ -10,6 +10,7 @@ import type {
   LoadResult,
   NodeJSON,
   PluginError,
+  SelectionSnapshot,
 } from "@kaelen/editor-shared-types";
 
 /**
@@ -37,6 +38,7 @@ export interface RichEditor {
   /** 编辑态 / 只读态 / 禁用态。三者语义不同，见 `EditorMode`（方案 §4.1）。 */
   getMode(): EditorMode;
   setMode(mode: EditorMode): void;
+  getSelectionState(): SelectionSnapshot;
 
   /** 引用稳定的状态快照，供 useSyncExternalStore / Vue computed 使用。 */
   getSnapshot(): EditorSnapshot;
@@ -78,6 +80,7 @@ export function createEditor(options: EditorOptions = {}): RichEditor {
     queryCommand: (command, input) => runtime.queryCommand(command, input),
     getMode: () => runtime.getMode(),
     setMode: (mode) => runtime.setMode(mode),
+    getSelectionState: () => runtime.getSelectionState(),
     getSnapshot: () => runtime.getSnapshot(),
     subscribe: (event, listener) => runtime.subscribe(event, listener),
     getPluginErrors: () => runtime.getPluginErrors(),

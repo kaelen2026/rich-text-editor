@@ -91,7 +91,12 @@ export interface LoadResult {
 }
 
 /** 命令失败原因可判别，便于线上定位（方案 §8.1）。 */
-export type CommandFailureReason = "disabled" | "destroyed" | "invalid" | "pluginError";
+export type CommandFailureReason =
+  | "disabled"
+  | "destroyed"
+  | "invalid"
+  | "pluginError"
+  | "composing";
 
 export interface CommandResult {
   ok: boolean;
@@ -103,6 +108,18 @@ export interface CommandQuery {
   enabled: boolean;
   /** 选区当前是否整体处于该命令的生效状态。 */
   active: boolean;
+}
+
+/**
+ * 供工具栏判断上下文的轻量选区快照，不暴露 ProseMirror 的可变状态对象。
+ * 组合态是 DOM 接管模型的短暂窗口，宿主应据此暂停会改写文档的交互。
+ */
+export interface SelectionSnapshot {
+  empty: boolean;
+  marks: string[];
+  blockType: string;
+  path: string[];
+  composing: boolean;
 }
 
 /**
@@ -153,11 +170,17 @@ export interface PluginError {
  * 事件名。只列出当前真实会派发的事件；后续切片按需增补
  * （`patch` 等见方案 §9.4）。
  */
-export type EditorEventName = "change" | "documentDegraded" | "pluginError" | "patch";
+export type EditorEventName =
+  | "change"
+  | "compositionChanged"
+  | "documentDegraded"
+  | "patch"
+  | "pluginError";
 
 /** 事件载荷。没有载荷的事件为 `undefined`，`() => void` 形态的监听器照常可用。 */
 export interface EditorEventPayload {
   change: undefined;
+  compositionChanged: boolean;
   documentDegraded: undefined;
   pluginError: PluginError;
   /** 每个内容事务一条，可用于增量保存、协同和版本历史。 */
@@ -186,6 +209,8 @@ export interface EditorSnapshot {
   dirty: boolean;
   mounted: boolean;
   mode: EditorMode;
+  /** 输入法组合期间模型让位给 DOM，命令和非用户事务会被暂缓。 */
+  composing: boolean;
 }
 
 /**
