@@ -1,0 +1,14 @@
+{
+  "content": [
+    {
+      "type": "paragraph",
+      "content": [{ "type": "text", "text": "第一段" }]
+    },
+    {
+      "type": "paragraph",
+      "content": [{ "type": "text", "text": "第二段" }]
+    }
+  ],
+  "openStart": 1,
+  "openEnd": 1
+}

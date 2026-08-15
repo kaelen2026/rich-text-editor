@@ -4,11 +4,14 @@ import { type Command, EditorState, type Transaction } from "prosemirror-state";
 import { Mapping } from "prosemirror-transform";
 import { type DirectEditorProps, EditorView } from "prosemirror-view";
 import { isBlockOfType, isCheckedTaskItem, isWithinNode } from "./block-commands";
+import { type ClipboardPayloadMeta, createClipboardPlugin } from "./clipboard";
 import { editorPlugins } from "./plugins";
 import { restoreDoc, sanitizeDoc } from "./unknown";
 
 /** 状态变化通知。`docChanged` 区分内容变更与仅选区变更。 */
 export type SessionChangeListener = (docChanged: boolean) => void;
+/** 文档事务观察者。仅内部运行时使用，以便生成平台 patch 而不向业务泄漏 PM。 */
+export type SessionTransactionListener = (transaction: Transaction) => void;
 
 /** 受保护调用的结果。失败时状态已回滚，`error` 原样交给调用方上报。 */
 export type ProtectedOutcome<TValue> = { ok: true; value: TValue } | { ok: false; error: unknown };
@@ -36,13 +39,21 @@ export class EditorSession {
     doc: NodeJSON,
     private readonly onChange: SessionChangeListener = () => {},
     mode: EditorMode = "edit",
+    private readonly clipboardMeta: () => ClipboardPayloadMeta = () => ({
+      schemaVersion: 1,
+      plugins: {},
+    }),
+    private readonly onDocumentTransaction: SessionTransactionListener = () => {},
     private readonly onCompositionChange: (composing: boolean) => void = () => {},
   ) {
     this.mode = mode;
     this.state = EditorState.create({
       schema,
       doc: ProseMirrorNode.fromJSON(schema, sanitizeDoc(schema, doc).doc),
-      plugins: editorPlugins(schema, () => this.isComposing),
+      plugins: [
+        ...editorPlugins(schema, () => this.isComposing),
+        createClipboardPlugin({ getPayloadMeta: clipboardMeta }),
+      ],
     });
   }
 
@@ -196,7 +207,10 @@ export class EditorSession {
     this.state = EditorState.create({
       schema: this.schema,
       doc: ProseMirrorNode.fromJSON(this.schema, sanitized),
-      plugins: editorPlugins(this.schema, () => this.isComposing),
+      plugins: [
+        ...editorPlugins(this.schema, () => this.isComposing),
+        createClipboardPlugin({ getPayloadMeta: this.clipboardMeta }),
+      ],
     });
     this.view?.updateState(this.state);
     return { unknownNodes, unknownMarks };
@@ -255,6 +269,9 @@ export class EditorSession {
     }
     this.state = this.state.apply(transaction);
     this.view?.updateState(this.state);
+    if (transaction.docChanged) {
+      this.onDocumentTransaction(transaction);
+    }
     this.onChange(transaction.docChanged);
   }
 

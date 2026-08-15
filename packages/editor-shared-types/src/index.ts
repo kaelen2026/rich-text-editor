@@ -16,6 +16,30 @@ export interface MarkJSON {
   attrs?: Record<string, unknown>;
 }
 
+/** ProseMirror Slice 的平台自有 JSON 形态，不泄漏运行时对象。 */
+export interface SliceJSON {
+  content: NodeJSON[];
+  openStart: number;
+  openEnd: number;
+}
+
+/**
+ * 可持久化、可重放的文档增量。`v` 与文档的 schemaVersion 独立演进。
+ * 位置沿用 ProseMirror 的文档扁平位置语义；这是服务端和客户端共享的契约。
+ */
+export interface DocumentPatch {
+  v: 1;
+  from: number;
+  to: number;
+  ops: PatchOp[];
+  inverse: PatchOp[];
+}
+
+export type PatchOp =
+  | { type: "replace"; from: number; to: number; slice: SliceJSON }
+  | { type: "attr"; pos: number; attrs: Record<string, unknown> }
+  | { type: "mark"; from: number; to: number; mark: MarkJSON; add: boolean };
+
 /**
  * 评论/批注锚点。存在文档外部而非文档内部（方案 §9.8）。
  * S1 只定型字段，锚点映射由后续切片实现。
@@ -146,7 +170,12 @@ export interface PluginError {
  * 事件名。只列出当前真实会派发的事件；后续切片按需增补
  * （`patch` 等见方案 §9.4）。
  */
-export type EditorEventName = "change" | "compositionChanged" | "documentDegraded" | "pluginError";
+export type EditorEventName =
+  | "change"
+  | "compositionChanged"
+  | "documentDegraded"
+  | "patch"
+  | "pluginError";
 
 /** 事件载荷。没有载荷的事件为 `undefined`，`() => void` 形态的监听器照常可用。 */
 export interface EditorEventPayload {
@@ -154,6 +183,8 @@ export interface EditorEventPayload {
   compositionChanged: boolean;
   documentDegraded: undefined;
   pluginError: PluginError;
+  /** 每个内容事务一条，可用于增量保存、协同和版本历史。 */
+  patch: DocumentPatch;
 }
 
 /**
