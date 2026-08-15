@@ -9,10 +9,10 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@kaelen/editor-runtime": "workspace:*",
-    "prosemirror-commands": "^1.7.1"
+    "@kaelen/editor-runtime": "workspace:*"
   },
   "devDependencies": {
-    "@kaelen/editor-api": "workspace:*"
+    "@kaelen/editor-api": "workspace:*",
+    "@kaelen/editor-shared-types": "workspace:*"
   }
 }

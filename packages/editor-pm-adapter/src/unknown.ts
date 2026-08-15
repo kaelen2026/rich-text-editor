@@ -6,6 +6,8 @@ export interface SanitizeResult {
   doc: NodeJSON;
   /** 被兜底的节点名，按文档顺序去重。 */
   unknownNodes: string[];
+  /** 被丢弃的未知标记名，按文档顺序去重。文本保留，格式丢失。 */
+  unknownMarks: string[];
 }
 
 /**
@@ -14,8 +16,9 @@ export interface SanitizeResult {
  */
 export function sanitizeDoc(schema: Schema, doc: NodeJSON): SanitizeResult {
   const unknownNodes: string[] = [];
-  const sanitized = sanitizeNode(schema, doc, null, unknownNodes);
-  return { doc: sanitized, unknownNodes };
+  const unknownMarks: string[] = [];
+  const sanitized = sanitizeNode(schema, doc, null, unknownNodes, unknownMarks);
+  return { doc: sanitized, unknownNodes, unknownMarks };
 }
 
 /** `sanitizeDoc` 的逆操作：把兜底节点还原成它保存的原始 JSON。 */
@@ -46,6 +49,7 @@ function sanitizeNode(
   node: NodeJSON,
   parentType: string | null,
   unknownNodes: string[],
+  unknownMarks: string[],
 ): NodeJSON {
   if (!schema.nodes[node.type]) {
     if (!unknownNodes.includes(node.type)) {
@@ -67,11 +71,16 @@ function sanitizeNode(
   }
   if (node.content !== undefined) {
     sanitized.content = node.content.map((child) =>
-      sanitizeNode(schema, child, node.type, unknownNodes),
+      sanitizeNode(schema, child, node.type, unknownNodes, unknownMarks),
     );
   }
   if (node.marks !== undefined) {
-    // 未知标记直接丢弃标记，但保留它覆盖的文本。
+    // 未知标记直接丢弃标记，但保留它覆盖的文本；丢弃要上报，否则宿主无从提示。
+    for (const mark of node.marks) {
+      if (schema.marks[mark.type] === undefined && !unknownMarks.includes(mark.type)) {
+        unknownMarks.push(mark.type);
+      }
+    }
     const known = node.marks.filter((mark) => schema.marks[mark.type] !== undefined);
     if (known.length > 0) {
       sanitized.marks = known;

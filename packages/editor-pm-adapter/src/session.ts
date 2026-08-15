@@ -64,15 +64,15 @@ export class EditorSession {
    * 装载新文档。重建状态因此历史被清空——"装载不产生可撤销记录"由此成立，
    * 用户无法撤销到装载之前（方案 §8.1）。
    */
-  replaceDoc(doc: NodeJSON): string[] {
-    const { doc: sanitized, unknownNodes } = sanitizeDoc(this.schema, doc);
+  replaceDoc(doc: NodeJSON): { unknownNodes: string[]; unknownMarks: string[] } {
+    const { doc: sanitized, unknownNodes, unknownMarks } = sanitizeDoc(this.schema, doc);
     this.state = EditorState.create({
       schema: this.schema,
       doc: ProseMirrorNode.fromJSON(this.schema, sanitized),
       plugins: editorPlugins(this.schema),
     });
     this.view?.updateState(this.state);
-    return unknownNodes;
+    return { unknownNodes, unknownMarks };
   }
 
   /**
@@ -131,6 +131,76 @@ export class EditorSession {
       });
     }
     return sawText && covered;
+  }
+
+  /**
+   * 选区内是否**存在**该标记（不要求整体覆盖），且选区非空。
+   * 与 `isMarkActive` 的"整体覆盖"语义不同：移除类命令需要的是"有没有可移除的"。
+   */
+  hasMarkInSelection(markName: string): boolean {
+    const markType = this.schema.marks[markName];
+    if (!markType) {
+      return false;
+    }
+    const { selection, doc } = this.state;
+    if (selection.empty) {
+      return false;
+    }
+    let found = false;
+    for (const range of selection.ranges) {
+      doc.nodesBetween(range.$from.pos, range.$to.pos, (node) => {
+        if (found) {
+          return false;
+        }
+        if (node.isText && markType.isInSet(node.marks)) {
+          found = true;
+          return false;
+        }
+        return true;
+      });
+    }
+    return found;
+  }
+
+  /**
+   * 在选区上覆盖某个标记：先清后加。
+   *
+   * 不用 `toggleMark`——选区已被完全覆盖时它会走移除分支，"改属性"就变成了
+   * "删标记"。插件因此也不需要直接依赖 ProseMirror 命令（方案 §7.1）。
+   */
+  setMarkOverSelection(markName: string, attrs: Record<string, unknown>, apply: boolean): boolean {
+    const markType = this.schema.marks[markName];
+    const { selection } = this.state;
+    if (!markType || selection.empty) {
+      return false;
+    }
+    if (!apply) {
+      return true;
+    }
+    const transaction = this.state.tr;
+    for (const range of selection.ranges) {
+      transaction.removeMark(range.$from.pos, range.$to.pos, markType);
+      transaction.addMark(range.$from.pos, range.$to.pos, markType.create(attrs));
+    }
+    this.dispatch(transaction);
+    return true;
+  }
+
+  removeMarkOverSelection(markName: string, apply: boolean): boolean {
+    const markType = this.schema.marks[markName];
+    const { selection } = this.state;
+    if (!markType || selection.empty) {
+      return false;
+    }
+    if (!apply) {
+      return true;
+    }
+    const transaction = this.state.tr;
+    for (const range of selection.ranges) {
+      transaction.removeMark(range.$from.pos, range.$to.pos, markType);
+    }
+    this.dispatch(transaction);
+    return true;
   }
 
   markType(markName: string): MarkType | undefined {

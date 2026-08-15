@@ -452,7 +452,7 @@ unknown_inline: { group: 'inline', inline: true, atom: true, attrs: { original: 
 2. 渲染为只读占位，可整体选中、复制、删除，不可内部编辑。
 3. 保存时**原样写回原始 JSON**，`plugins` 版本号一并保留，不因途经一次编辑而降级。
 4. 若同一会话中稍后安装了对应插件，重新加载即恢复为正常节点。
-5. 未知标记（mark）直接丢弃标记但保留其覆盖的文本。当前不把标记丢失计入 `degraded`（只统计节点），如需提示"格式已丢失"需另加字段。
+5. 未知标记（mark）直接丢弃标记但保留其覆盖的文本。丢弃的标记名经 `LoadResult.unknownMarks` 上报并计入 `degraded`——标记承载的属性（如链接 href）无法用兜底节点保住，只能保住文本，因此**必须让宿主知道**，否则下一次保存会静默销毁这些属性。
 6. **兜底节点不带标记这一不变量必须由 runtime 维护，不能只靠 NodeSpec 的 `marks: ""`。** ProseMirror 的 `Transform.addMark` 按**父节点**的 `allowsMarkType` 判断：段落允许 `strong`，行内兜底节点就会被选区加粗一并命中，导致 DOM 上占位变粗而保存时标记又被丢弃（所见不等于所存）。实现方式是事务后清理，且该规范化事务不进用户历史。
 7. `loadDocument` 返回 `LoadResult { migrated: boolean; unknownNodes: string[]; degraded: boolean }`，宿主据此提示用户"部分内容以只读形式显示"。
 8. 隔离范围不止 `attrs.original`：信封的 `plugins`、`annotations`，以及已知节点的 `attrs`（ProseMirror 的 `Node.toJSON` 按引用交出活节点的 attrs），在装载与取回两侧都必须切断引用。

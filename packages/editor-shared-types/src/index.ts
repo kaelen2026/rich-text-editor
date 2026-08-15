@@ -61,6 +61,8 @@ export interface LoadResult {
   degraded: boolean;
   /** 被兜底的节点名，按文档顺序去重。 */
   unknownNodes: string[];
+  /** 被丢弃的未知标记名：文本保留、格式丢失，宿主应据此提示。 */
+  unknownMarks: string[];
   errors?: string[];
 }
 

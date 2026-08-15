@@ -48,7 +48,8 @@ export interface RuntimeOptions {
 export function createRuntime(options: RuntimeOptions = {}): Runtime {
   const migrations = options.migrations ?? [];
   assertMigrationsDeclareReversibility(migrations);
-  const capabilities = collectPluginCapabilities(options.plugins ?? []);
+  const installedPlugins = options.plugins ?? [];
+  const capabilities = collectPluginCapabilities(installedPlugins);
   const schema = buildSchema({ nodes: capabilities.nodes, marks: capabilities.marks });
   const initial = createEmptyEnvelope();
   const commands = new Map([...Object.entries(coreCommands), ...capabilities.commands]);
@@ -90,39 +91,55 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
           migrated: false,
           degraded: false,
           unknownNodes: [],
+          unknownMarks: [],
           errors: migration.errors,
         };
       }
       const envelope = migration.envelope;
       const errors = validateEnvelope(envelope);
       if (errors.length > 0) {
-        return { ok: false, migrated: false, degraded: false, unknownNodes: [], errors };
+        return {
+          ok: false,
+          migrated: false,
+          degraded: false,
+          unknownNodes: [],
+          unknownMarks: [],
+          errors,
+        };
       }
-      let unknownNodes: string[];
+      let degradation: { unknownNodes: string[]; unknownMarks: string[] };
       try {
-        unknownNodes = session.replaceDoc(envelope.doc);
+        degradation = session.replaceDoc(envelope.doc);
       } catch (error) {
         return {
           ok: false,
           migrated: false,
           degraded: false,
           unknownNodes: [],
+          unknownMarks: [],
           errors: [describe(error)],
         };
       }
       meta = toMeta(envelope);
+      // 记录本环境安装了哪些插件，供缺插件的环境判断需要什么才能完整编辑。
+      // 已记录的版本不覆盖：文档自己的记录由该插件的迁移函数推进。
+      for (const plugin of installedPlugins) {
+        meta.plugins[plugin.name] ??= plugin.structureVersion ?? 1;
+      }
       // 装载是初始化，不是用户编辑：修订号与脏标记归零。
       revision = 0;
       dirty = false;
       invalidate();
-      if (unknownNodes.length > 0) {
+      const degraded = degradation.unknownNodes.length > 0 || degradation.unknownMarks.length > 0;
+      if (degraded) {
         emit("documentDegraded");
       }
       return {
         ok: true,
         migrated: migration.migrated,
-        degraded: unknownNodes.length > 0,
-        unknownNodes,
+        degraded,
+        unknownNodes: degradation.unknownNodes,
+        unknownMarks: degradation.unknownMarks,
       };
     },
 
