@@ -234,7 +234,7 @@ export interface CoreTagParseRule {
    * 从已由上层白名单化的 DOM 读取属性。映射是声明式的，避免把可执行的
    * `getAttrs` 钩子泄漏到可共享的 Schema 定义中。
    */
-  attrsFromDOM?: Record<string, string>;
+  attrsFromDOM?: Record<string, string | CoreDOMAttributeRule>;
   /** 代码块等需要保留原样空白的节点。 */
   preserveWhitespace?: boolean | "full";
 }
@@ -242,6 +242,15 @@ export interface CoreTagParseRule {
 export interface CoreStyleParseRule {
   style: string;
   priority?: number;
+}
+
+/** DOM 属性的声明式读取与规范化规则。 */
+export interface CoreDOMAttributeRule {
+  attribute: string;
+  type?: "integer";
+  min?: number;
+  max?: number;
+  default?: unknown;
 }
 
 /** 节点只能按标签解析；样式解析只对标记有意义。 */
@@ -279,6 +288,10 @@ export interface CoreNodeSpec {
    * 少了它，往标题里粘一段带结构的内容会把标题本身弄没。
    */
   defining?: boolean;
+  /** 表格等结构在替换时不能从边界穿透。 */
+  isolating?: boolean;
+  /** prosemirror-tables 用于识别 table / row / cell / header_cell。 */
+  tableRole?: "table" | "row" | "cell" | "header_cell";
   selectable?: boolean;
   attrs?: Record<string, CoreAttrSpec>;
   parseDOM?: CoreTagParseRule[];

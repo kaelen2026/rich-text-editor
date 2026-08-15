@@ -56,7 +56,11 @@ function appendBlock(document: Document, parent: HTMLElement, node: Node, schema
     return;
   }
   if (tag === "table") {
-    appendTextParagraph(document, parent, safeTextContent(element));
+    if (hasTableSchema(schema)) {
+      appendTable(document, parent, element, schema);
+    } else {
+      appendTextParagraph(document, parent, safeTextContent(element));
+    }
     return;
   }
   if (tag === "p" || blockTags.has(tag)) {
@@ -107,6 +111,74 @@ function appendBlock(document: Document, parent: HTMLElement, node: Node, schema
   const paragraph = document.createElement("p");
   appendInline(document, paragraph, element, schema);
   appendIfMeaningful(parent, paragraph);
+}
+
+function hasTableSchema(schema: Schema): boolean {
+  return Boolean(
+    schema.nodes.co_table &&
+      schema.nodes.co_table_row &&
+      schema.nodes.co_table_cell &&
+      schema.nodes.co_table_header,
+  );
+}
+
+function appendTable(
+  document: Document,
+  parent: HTMLElement,
+  source: Element,
+  schema: Schema,
+): void {
+  const rows = Array.from(source.querySelectorAll("tr"));
+  const cellCount = rows.reduce(
+    (count, row) =>
+      count +
+      Array.from(row.children).filter((child) => {
+        const tag = child.localName.toLowerCase();
+        return tag === "td" || tag === "th";
+      }).length,
+    0,
+  );
+  if (cellCount === 0 || cellCount > 5000) {
+    appendTextParagraph(document, parent, safeTextContent(source));
+    return;
+  }
+
+  const table = document.createElement("table");
+  const body = document.createElement("tbody");
+  for (const sourceRow of rows) {
+    const row = document.createElement("tr");
+    for (const sourceCell of Array.from(sourceRow.children)) {
+      const tag = sourceCell.localName.toLowerCase();
+      if (tag !== "td" && tag !== "th") {
+        continue;
+      }
+      const cell = document.createElement(tag);
+      copyTableSpan(sourceCell, cell, "colspan");
+      copyTableSpan(sourceCell, cell, "rowspan");
+      appendBlockChildren(document, cell, sourceCell, schema);
+      if (cell.childElementCount === 0) {
+        cell.appendChild(document.createElement("p"));
+      }
+      row.appendChild(cell);
+    }
+    if (row.childElementCount > 0) {
+      body.appendChild(row);
+    }
+  }
+  if (body.childElementCount > 0) {
+    table.appendChild(body);
+    parent.appendChild(table);
+  }
+}
+
+function copyTableSpan(
+  source: Element,
+  target: HTMLElement,
+  attribute: "colspan" | "rowspan",
+): void {
+  const raw = Number(source.getAttribute(attribute));
+  const value = Number.isInteger(raw) ? Math.max(1, Math.min(1000, raw)) : 1;
+  target.setAttribute(attribute, String(value));
 }
 
 function appendBlockChildren(

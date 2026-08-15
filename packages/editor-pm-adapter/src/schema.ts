@@ -1,5 +1,6 @@
 import { coreMarks, coreNodes } from "@kaelen/editor-schema";
 import type {
+  CoreDOMAttributeRule,
   CoreMarkSpec,
   CoreNodeSpec,
   CoreParseRule,
@@ -92,13 +93,30 @@ function toTagParseRule(rule: CoreTagParseRule): TagParseRule {
     ...rest,
     getAttrs: (element: HTMLElement) => {
       return Object.fromEntries(
-        Object.entries(attrsFromDOM).map(([attribute, source]) => [
-          attribute,
-          element.getAttribute(source),
-        ]),
+        Object.entries(attrsFromDOM).map(([attribute, source]) => {
+          if (typeof source === "string") {
+            return [attribute, element.getAttribute(source)];
+          }
+          return [attribute, readDOMAttribute(element, source)];
+        }),
       );
     },
   };
+}
+
+function readDOMAttribute(element: HTMLElement, rule: CoreDOMAttributeRule): unknown {
+  const raw = element.getAttribute(rule.attribute);
+  if (rule.type !== "integer") {
+    return raw ?? rule.default;
+  }
+  const value = raw ? Number(raw) : Number.NaN;
+  if (!Number.isInteger(value)) {
+    return rule.default;
+  }
+  return Math.max(
+    rule.min ?? Number.MIN_SAFE_INTEGER,
+    Math.min(rule.max ?? Number.MAX_SAFE_INTEGER, value),
+  );
 }
 
 function asDomOutputSpec(spec: DomOutputSpec): DOMOutputSpec {
