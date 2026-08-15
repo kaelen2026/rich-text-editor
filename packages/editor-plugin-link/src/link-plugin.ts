@@ -1,5 +1,4 @@
 import type { EditorPlugin, SessionCommand } from "@kaelen/editor-runtime";
-import { toggleMark } from "prosemirror-commands";
 
 const LINK_MARK = "co_link";
 const allowedProtocols = new Set(["https:", "http:", "mailto:", "tel:"]);
@@ -10,11 +9,20 @@ export function createLinkPlugin(): EditorPlugin {
     name: "link",
     version: "1.0.0",
     namespace: "co_",
+    structureVersion: 1,
     extendSchema: (schema) => {
       schema.addMark(LINK_MARK, {
         attrs: { href: {} },
-        parseDOM: [{ tag: "a[href]" }],
-        toDOM: (node) => ["a", { href: String(node.attrs.href), rel: "noopener noreferrer" }, 0],
+        // 不声明 parseDOM：平台的 CoreParseRule 还表达不了 getAttrs，
+        // 解析出来的链接 href 会是 null；在能连同协议一起校验之前不开这条路径。
+        toDOM: (node) => {
+          const href = safeHref(node.attrs.href);
+          // 白名单必须在渲染处再判一次：文档可能来自 localStorage、服务端或导入，
+          // 而同一个 toDOM 还要用于服务端渲染 HTML（方案 §12.1）。
+          return href
+            ? ["a", { href, rel: "noopener noreferrer" }, 0]
+            : ["span", { "data-unsafe-link": "true" }, 0];
+        },
       });
     },
     registerCommands: (commands) => {
@@ -35,10 +43,7 @@ const setLinkCommand: SessionCommand = {
     if (!markType) {
       return { ok: false, reason: "disabled" };
     }
-    const ok = session.applyCommand(
-      toggleMark(markType, { href }, { removeWhenPresent: false }),
-      apply,
-    );
+    const ok = session.setMarkOverSelection(LINK_MARK, { href }, apply);
     return ok ? { ok: true } : { ok: false, reason: "disabled" };
   },
   enabled: (session) => setLinkCommand.run(session, false, { href: "https://example.invalid" }).ok,
@@ -51,9 +56,15 @@ const unsetLinkCommand: SessionCommand = {
     if (!markType) {
       return { ok: false, reason: "disabled" };
     }
-    const ok = session.applyCommand(toggleMark(markType), apply);
+    // 选区里没有链接时直接拒绝：否则 toggleMark 会走"添加"分支，
+    // 用 create(undefined) 造出一个 href 为 null 的垃圾链接。
+    if (!session.hasMarkInSelection(LINK_MARK)) {
+      return { ok: false, reason: "disabled" };
+    }
+    const ok = session.removeMarkOverSelection(LINK_MARK, apply);
     return ok ? { ok: true } : { ok: false, reason: "disabled" };
   },
+  enabled: (session) => session.hasMarkInSelection(LINK_MARK),
   active: (session) => session.isMarkActive(LINK_MARK),
 };
 
@@ -69,12 +80,16 @@ function hrefFrom(input: unknown): string | undefined {
   if (typeof input !== "object" || input === null || !("href" in input)) {
     return undefined;
   }
-  const href = input.href;
-  if (typeof href !== "string") {
+  return safeHref(input.href);
+}
+
+/** 协议白名单。命令输入与渲染两处都走它。 */
+function safeHref(value: unknown): string | undefined {
+  if (typeof value !== "string") {
     return undefined;
   }
   try {
-    const url = new URL(href);
+    const url = new URL(value);
     return allowedProtocols.has(url.protocol) ? url.href : undefined;
   } catch {
     return undefined;

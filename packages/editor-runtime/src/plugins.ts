@@ -18,6 +18,11 @@ export interface EditorPlugin {
   version: string;
   /** 插件持久化节点/标记使用的全局命名空间；当前固定为 `co_`。 */
   namespace: "co_";
+  /**
+   * 该插件贡献的文档结构版本，写进信封的 `plugins`。与包版本（semver 的
+   * `version`）不同：它是持久化数据的版本，由插件自己的迁移函数推进。
+   */
+  structureVersion?: number;
   dependsOn?: string[];
   extendSchema?(schema: SchemaBuilder): void;
   registerCommands?(commands: CommandRegistry): void;

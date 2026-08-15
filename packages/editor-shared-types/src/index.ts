@@ -41,12 +41,28 @@ export interface EditorEnvelope {
   annotations: Annotation[];
 }
 
+/**
+ * 一步文档结构迁移。由平台或插件提供，按 `to` 从小到大依次执行（方案 §12.2）。
+ * 每步必须提供 `down` 或显式标注 `irreversible`。
+ */
+export interface DocumentMigration {
+  /** 本步把文档升级到这个 schemaVersion。 */
+  to: number;
+  up(envelope: EditorEnvelope): EditorEnvelope;
+  down?(envelope: EditorEnvelope): EditorEnvelope;
+  irreversible?: true;
+}
+
 export interface LoadResult {
   ok: boolean;
+  /** 输入是否被迁移到当前信封/结构版本。 */
+  migrated: boolean;
   /** 是否有内容被降级为只读兜底节点。宿主据此提示用户。 */
   degraded: boolean;
   /** 被兜底的节点名，按文档顺序去重。 */
   unknownNodes: string[];
+  /** 被丢弃的未知标记名：文本保留、格式丢失，宿主应据此提示。 */
+  unknownMarks: string[];
   errors?: string[];
 }
 

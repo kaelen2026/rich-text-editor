@@ -96,13 +96,13 @@ importers:
       '@kaelen/editor-runtime':
         specifier: workspace:*
         version: link:../editor-runtime
-      prosemirror-commands:
-        specifier: ^1.7.1
-        version: 1.7.2
     devDependencies:
       '@kaelen/editor-api':
         specifier: workspace:*
         version: link:../editor-api
+      '@kaelen/editor-shared-types':
+        specifier: workspace:*
+        version: link:../editor-shared-types
 
   packages/editor-pm-adapter:
     dependencies:
