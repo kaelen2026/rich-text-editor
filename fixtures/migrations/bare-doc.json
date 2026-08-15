@@ -1,0 +1,20 @@
+{
+  "type": "doc",
+  "content": [
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "text",
+          "text": "版本化之前写下的文档"
+        }
+      ]
+    },
+    {
+      "type": "co_embed",
+      "attrs": {
+        "url": "https://example.com"
+      }
+    }
+  ]
+}

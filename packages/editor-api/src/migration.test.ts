@@ -1,4 +1,7 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { createEditor } from "@kaelen/editor-api";
+import { stringifyEnvelope } from "@kaelen/editor-schema";
 import type { DocumentMigration, EditorEnvelope, NodeJSON } from "@kaelen/editor-shared-types";
 import { describe, expect, it } from "vitest";
 
@@ -188,5 +191,26 @@ describe("迁移失败的隔离", () => {
     expect(result.ok).toBe(false);
     expect(firstText(editor.getDocument())).toBe(before);
     expect(editor.execute("selection.selectAll").ok).toBe(true);
+  });
+});
+
+describe("迁移的期望产物", () => {
+  const bareText = readFileSync(
+    resolve(import.meta.dirname, "../../../fixtures/migrations/bare-doc.json"),
+    "utf8",
+  ).trimEnd();
+  const expectedText = readFileSync(
+    resolve(import.meta.dirname, "../../../fixtures/migrations/bare-doc.envelope.json"),
+    "utf8",
+  ).trimEnd();
+
+  it("裸文档迁移后的信封与期望文件逐字节一致", () => {
+    const editor = createEditor();
+
+    const result = editor.loadDocument(JSON.parse(bareText));
+
+    expect(result.ok).toBe(true);
+    expect(result.migrated).toBe(true);
+    expect(stringifyEnvelope(editor.getDocument())).toBe(expectedText);
   });
 });

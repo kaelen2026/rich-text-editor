@@ -440,7 +440,7 @@ export interface UploadedAsset {
 unknown_block: {
   group: 'block',
   atom: true,
-  attrs: { original: {}, nodeName: {}, pluginVersion: { default: null } },
+  attrs: { original: {}, nodeName: {} },
   // 渲染为只读占位块："此内容需要 X 功能才能显示与编辑"
 }
 unknown_inline: { group: 'inline', inline: true, atom: true, attrs: { original: {}, nodeName: {} } }
@@ -448,13 +448,14 @@ unknown_inline: { group: 'inline', inline: true, atom: true, attrs: { original: 
 
 规则：
 
-1. 加载时遇到 Schema 中不存在的节点名 → 包装为 `unknown_block` / `unknown_inline`，`attrs.original` **原样保存该节点完整 JSON**（含子树）。
+1. 加载时遇到 Schema 中不存在的节点名 → 包装为 `unknown_block` / `unknown_inline`，`attrs.original` **原样保存该节点完整 JSON**（含子树）。该 JSON 必须以**深拷贝**存入、并在取回时深拷贝返回：调用方之后修改自己传入的对象，或修改 `getDocument()` 的返回值，都不得影响编辑器状态（反之亦然）。"原样保存"的强度等于这份快照的隔离度。
 2. 渲染为只读占位，可整体选中、复制、删除，不可内部编辑。
 3. 保存时**原样写回原始 JSON**，`plugins` 版本号一并保留，不因途经一次编辑而降级。
 4. 若同一会话中稍后安装了对应插件，重新加载即恢复为正常节点。
 5. 未知标记（mark）直接丢弃标记但保留其覆盖的文本。当前不把标记丢失计入 `degraded`（只统计节点），如需提示"格式已丢失"需另加字段。
 6. **兜底节点不带标记这一不变量必须由 runtime 维护，不能只靠 NodeSpec 的 `marks: ""`。** ProseMirror 的 `Transform.addMark` 按**父节点**的 `allowsMarkType` 判断：段落允许 `strong`，行内兜底节点就会被选区加粗一并命中，导致 DOM 上占位变粗而保存时标记又被丢弃（所见不等于所存）。实现方式是事务后清理，且该规范化事务不进用户历史。
-6. `loadDocument` 返回 `LoadResult { migrated: boolean; unknownNodes: string[]; degraded: boolean }`，宿主据此提示用户"部分内容以只读形式显示"。
+7. `loadDocument` 返回 `LoadResult { migrated: boolean; unknownNodes: string[]; degraded: boolean }`，宿主据此提示用户"部分内容以只读形式显示"。
+8. 隔离范围不止 `attrs.original`：信封的 `plugins`、`annotations`，以及已知节点的 `attrs`（ProseMirror 的 `Node.toJSON` 按引用交出活节点的 attrs），在装载与取回两侧都必须切断引用。
 
 ### 9.4 事务、状态与历史
 

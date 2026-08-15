@@ -1,6 +1,7 @@
 import { buildSchema, coreCommands, EditorSession } from "@kaelen/editor-pm-adapter";
 import {
   assertMigrationsDeclareReversibility,
+  cloneJson,
   createEmptyEnvelope,
   migrateEnvelope,
   validateEnvelope,
@@ -123,7 +124,13 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
     },
 
     getDocument(): EditorEnvelope {
-      return { ...meta, doc: session.docJSON };
+      // 交出去的是快照：调用方改写返回值不得影响内部状态（方案 §9.3）。
+      return {
+        ...meta,
+        plugins: { ...meta.plugins },
+        annotations: cloneJson(meta.annotations),
+        doc: session.docJSON,
+      };
     },
 
     execute(command: string): CommandResult {
@@ -220,7 +227,8 @@ function toMeta(envelope: EditorEnvelope): EnvelopeMeta {
     envelope: envelope.envelope,
     schemaVersion: envelope.schemaVersion,
     plugins: { ...envelope.plugins },
-    annotations: [...envelope.annotations],
+    // 深拷贝：批注对象与 payload 都是调用方的，浅拷数组挡不住后续改写。
+    annotations: cloneJson(envelope.annotations),
   };
 }
 
