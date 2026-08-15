@@ -4,9 +4,11 @@ import type {
   CommandResult,
   EditorEnvelope,
   EditorEventName,
+  EditorEventPayload,
   EditorSnapshot,
   LoadResult,
   NodeJSON,
+  PluginError,
 } from "@kaelen/editor-shared-types";
 
 /**
@@ -31,7 +33,15 @@ export interface RichEditor {
   /** 引用稳定的状态快照，供 useSyncExternalStore / Vue computed 使用。 */
   getSnapshot(): EditorSnapshot;
   /** 订阅状态变化。返回取消订阅函数。 */
-  subscribe(event: EditorEventName, listener: () => void): () => void;
+  subscribe<TEvent extends EditorEventName>(
+    event: TEvent,
+    listener: (payload: EditorEventPayload[TEvent]) => void,
+  ): () => void;
+  /**
+   * 已发生的插件降级记录，用于展示"X 功能暂时不可用，内容已保留"。
+   * 包含启动期冲突：那些发生在宿主能订阅 `pluginError` 之前（方案 §8.3、§8.6）。
+   */
+  getPluginErrors(): readonly PluginError[];
   isDirty(): boolean;
   /** 宿主完成持久化后调用，清除脏标记且不影响撤销历史。 */
   markSaved(): void;
@@ -60,6 +70,7 @@ export function createEditor(options: EditorOptions = {}): RichEditor {
     queryCommand: (command) => runtime.queryCommand(command),
     getSnapshot: () => runtime.getSnapshot(),
     subscribe: (event, listener) => runtime.subscribe(event, listener),
+    getPluginErrors: () => runtime.getPluginErrors(),
     isDirty: () => runtime.isDirty(),
     markSaved: () => runtime.markSaved(),
     getRevision: () => runtime.getRevision(),
