@@ -1,4 +1,4 @@
-import { createEditor, type RichEditor } from "@kaelen/editor-api";
+import { createEditor, type EditorOptions, type RichEditor } from "@kaelen/editor-api";
 import { createLinkPlugin } from "@kaelen/editor-plugin-link";
 import {
   EditorContent,
@@ -6,12 +6,53 @@ import {
   useCommandQuery,
   useEditor,
   useEditorSelector,
+  usePluginErrors,
 } from "@kaelen/editor-react";
 import { createEmptyEnvelope, stringifyEnvelope } from "@kaelen/editor-schema";
 import type { EditorEnvelope } from "@kaelen/editor-shared-types";
-import { useRef, useState } from "react";
+import { useState } from "react";
 
 const STORAGE_KEY = "playground.document";
+
+type InstalledPlugins = NonNullable<EditorOptions["plugins"]>;
+
+/**
+ * 模拟一批坏掉的第三方插件。每一种坏法都必须只让它自己失效，
+ * 编辑器照常可用、文档一字不丢（方案 §8.3、§8.6）。
+ */
+const FAULTY_PLUGINS: InstalledPlugins = [
+  {
+    // 运行期抛错：命令一调就炸，用来演示熔断。
+    name: "fault",
+    version: "0.0.1",
+    namespace: "co_",
+    registerCommands: (commands) =>
+      commands.add("fault.crash", {
+        run: () => {
+          throw new Error("第三方插件内部错误");
+        },
+        active: () => false,
+      }),
+  },
+  {
+    // 想占用冻结核心集里的标记名。
+    name: "shadow",
+    version: "0.0.1",
+    namespace: "co_",
+    extendSchema: (schema) => schema.addMark("strong", { toDOM: () => ["b", 0] }),
+  },
+  {
+    // 想覆盖核心命令：只有这条命令被忽略，插件其余能力保留。
+    name: "hijack",
+    version: "0.0.1",
+    namespace: "co_",
+    registerCommands: (commands) =>
+      commands.add("format.bold", { run: () => ({ ok: true }), active: () => true }),
+  },
+  { name: "orphan", version: "0.0.1", namespace: "co_", dependsOn: ["never-installed"] },
+  { name: "ring-a", version: "0.0.1", namespace: "co_", dependsOn: ["ring-b"] },
+  { name: "ring-b", version: "0.0.1", namespace: "co_", dependsOn: ["ring-a"] },
+];
 
 /** 模拟一份由"已安装表格与提及插件"的环境写出的文档。 */
 const UNKNOWN_SAMPLE: EditorEnvelope = {
@@ -62,6 +103,20 @@ function readStoredDocument(): EditorEnvelope {
   }
 }
 
+interface Boot {
+  editor: RichEditor;
+  unknownNodes: string[];
+  faulty: boolean;
+}
+
+function bootEditor(faulty: boolean, document: EditorEnvelope): Boot {
+  const editor = createEditor({
+    plugins: faulty ? [createLinkPlugin(), ...FAULTY_PLUGINS] : [createLinkPlugin()],
+  });
+  const result = editor.loadDocument(document);
+  return { editor, unknownNodes: result.unknownNodes, faulty };
+}
+
 function CommandButton({ command, label }: { command: string; label: string }) {
   const editor = useEditor();
   const { enabled, active } = useCommandQuery(command);
@@ -81,7 +136,34 @@ function CommandButton({ command, label }: { command: string; label: string }) {
   );
 }
 
-function Toolbar({ onSave, onLoadSample }: { onSave: () => void; onLoadSample: () => void }) {
+/** 降级提示。宿主只需要这一处：启动期冲突与运行期熔断都汇到这里。 */
+function DegradedBanner() {
+  const errors = usePluginErrors();
+  if (errors.length === 0) {
+    return null;
+  }
+  return (
+    <div className="degraded" role="status">
+      <strong>部分功能暂时不可用，内容已保留：</strong>
+      <ul>
+        {errors.map((error, index) => (
+          <li key={`${error.plugin}-${error.kind}-${error.item ?? index}`}>{error.message}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function Toolbar({
+  onSave,
+  onLoadSample,
+  faulty,
+}: {
+  onSave: () => void;
+  onLoadSample: () => void;
+  faulty: boolean;
+}) {
+  const editor = useEditor();
   const dirty = useEditorSelector((snapshot) => snapshot.dirty);
   const revision = useEditorSelector((snapshot) => snapshot.revision);
 
@@ -99,6 +181,11 @@ function Toolbar({ onSave, onLoadSample }: { onSave: () => void; onLoadSample: (
       <button type="button" onClick={onLoadSample}>
         装载含未知节点的示例
       </button>
+      {faulty ? (
+        <button type="button" onClick={() => editor.execute("fault.crash")}>
+          触发插件故障
+        </button>
+      ) : null}
       <span className="status">
         修订号 {revision} · {dirty ? "未保存" : "已保存"}
       </span>
@@ -129,15 +216,9 @@ function LinkButton() {
 }
 
 export function App() {
-  const bootRef = useRef<{ editor: RichEditor; unknownNodes: string[] } | null>(null);
-  if (!bootRef.current) {
-    const editor = createEditor({ plugins: [createLinkPlugin()] });
-    const result = editor.loadDocument(readStoredDocument());
-    bootRef.current = { editor, unknownNodes: result.unknownNodes };
-  }
-  const { editor } = bootRef.current;
-  const [unknownNodes, setUnknownNodes] = useState<string[]>(bootRef.current.unknownNodes);
+  const [boot, setBoot] = useState<Boot>(() => bootEditor(false, readStoredDocument()));
   const [saved, setSaved] = useState<string | null>(null);
+  const { editor, unknownNodes, faulty } = boot;
 
   function save() {
     const text = stringifyEnvelope(editor.getDocument());
@@ -149,24 +230,41 @@ export function App() {
 
   function loadSample() {
     const result = editor.loadDocument(UNKNOWN_SAMPLE);
-    setUnknownNodes(result.unknownNodes);
+    setBoot({ ...boot, unknownNodes: result.unknownNodes });
+    setSaved(null);
+  }
+
+  /** 装/不装故障插件是两种配置，切换即换一个实例；文档原样带过去。 */
+  function toggleFault(next: boolean) {
+    const document = editor.getDocument();
+    editor.destroy();
+    setBoot(bootEditor(next, document));
     setSaved(null);
   }
 
   return (
     <EditorProvider editor={editor}>
-      <h1>富文本编辑器 · 插件运行时与链接</h1>
+      <h1>富文本编辑器 · 插件冲突降级与熔断</h1>
       <p className="hint">
         输入文字，用 Cmd/Ctrl+B 加粗、Cmd/Ctrl+I 斜体、Cmd/Ctrl+Z 撤销；选中文本后可添加安全链接。
         点"保存"写入 localStorage，刷新页面内容仍在。
       </p>
+      <label className="switch">
+        <input
+          type="checkbox"
+          checked={faulty}
+          onChange={(event) => toggleFault(event.target.checked)}
+        />
+        注入故障插件（重名、缺依赖、循环依赖、覆盖核心命令、命令抛错）
+      </label>
+      <DegradedBanner />
       {unknownNodes.length > 0 ? (
         <p className="warning">
           部分内容以只读形式显示，需要这些功能才能编辑：{unknownNodes.join("、")}
           。保存时这些内容会原样写回，不会丢失。
         </p>
       ) : null}
-      <Toolbar onSave={save} onLoadSample={loadSample} />
+      <Toolbar onSave={save} onLoadSample={loadSample} faulty={faulty} />
       <div className="surface">
         <EditorContent />
       </div>

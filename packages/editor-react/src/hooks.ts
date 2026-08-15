@@ -1,4 +1,4 @@
-import type { CommandQuery, EditorSnapshot } from "@kaelen/editor-shared-types";
+import type { CommandQuery, EditorSnapshot, PluginError } from "@kaelen/editor-shared-types";
 import { useCallback, useRef, useSyncExternalStore } from "react";
 import { useEditor } from "./editor-context";
 
@@ -45,6 +45,20 @@ export function useEditorSelector<TSelected>(
   }, [editor]);
 
   return useSyncExternalStore(subscribe, getSelected, getSelected);
+}
+
+/**
+ * 插件降级记录，供宿主展示"X 功能暂时不可用，内容已保留"（方案 §8.6）。
+ * 初值取自 `getPluginErrors()` 而不是空数组：启动期的冲突发生在订阅之前。
+ */
+export function usePluginErrors(): readonly PluginError[] {
+  const editor = useEditor();
+  const subscribe = useCallback(
+    (onStoreChange: () => void) => editor.subscribe("pluginError", onStoreChange),
+    [editor],
+  );
+  const getSnapshot = useCallback(() => editor.getPluginErrors(), [editor]);
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 
 /** 工具栏按钮所需的状态。不读文档，只查命令。 */
