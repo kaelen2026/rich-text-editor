@@ -38,6 +38,34 @@ function headingTag(level: unknown): string {
 }
 
 /**
+ * 文本块的水平对齐。`null` 是"没有设置"，与"设成左对齐"不是一回事：
+ * 前者跟随容器（阿拉伯语等 RTL 文档里就是右起），后者钉死在左边。
+ */
+export const BLOCK_ALIGNMENTS = ["left", "center", "right", "justify"] as const;
+export type BlockAlign = (typeof BLOCK_ALIGNMENTS)[number];
+
+export function isBlockAlign(value: unknown): value is BlockAlign {
+  return typeof value === "string" && (BLOCK_ALIGNMENTS as readonly string[]).includes(value);
+}
+
+/** 供 `parseDOM` 复用的声明式读取规则：白名单之外的值一律当作没设置。 */
+const ALIGN_FROM_DOM = {
+  align: { attribute: "data-align", oneOf: BLOCK_ALIGNMENTS, default: null },
+} as const;
+
+/**
+ * 对齐的 DOM 表达。同时写 `style` 与 `data-align`：前者让 `getHTML()` 导出的
+ * 内容脱离本项目样式表也保真，后者是重新解析时的唯一入口——`style` 属性不参与
+ * 节点解析（可执行的样式串不该决定文档结构）。
+ *
+ * 没设置对齐时返回空数组，`toDOM` 因此输出与从前逐字节相同的 `<p>`：
+ * 绝大多数段落不该为一个未使用的功能付出属性体积。
+ */
+function alignAttributes(align: unknown): [Record<string, string>] | [] {
+  return isBlockAlign(align) ? [{ style: `text-align:${align}`, "data-align": align }] : [];
+}
+
+/**
  * 冻结核心节点集：不带命名空间前缀，永不改名（方案 §9.2）。
  * paragraph 必须排在其余块节点之前——ProseMirror 用声明顺序决定
  * `block+` 位置的默认节点类型，换个顺序默认块就不是段落了。
@@ -47,8 +75,9 @@ export const coreNodes: Record<string, CoreNodeSpec> = {
   paragraph: {
     content: "inline*",
     group: "block",
-    parseDOM: [{ tag: "p" }],
-    toDOM: () => ["p", 0],
+    attrs: { align: { default: null } },
+    parseDOM: [{ tag: "p", attrsFromDOM: ALIGN_FROM_DOM }],
+    toDOM: (node) => ["p", ...alignAttributes(node.attrs.align), 0],
   },
   text: { group: "inline" },
 
@@ -56,15 +85,16 @@ export const coreNodes: Record<string, CoreNodeSpec> = {
     content: "inline*",
     group: "block",
     defining: true,
-    attrs: { level: { default: 1 } },
-    // 每个标签一条常量属性规则，因此不需要 getAttrs 这类可执行钩子。
+    attrs: { level: { default: 1 }, align: { default: null } },
+    // 层级仍是每个标签一条常量规则；对齐是声明式的属性映射，两者都不需要
+    // getAttrs 这类可执行钩子。
     parseDOM: [
-      { tag: "h1", attrs: { level: 1 } },
-      { tag: "h2", attrs: { level: 2 } },
-      { tag: "h3", attrs: { level: 3 } },
-      { tag: "h4", attrs: { level: 4 } },
+      { tag: "h1", attrs: { level: 1 }, attrsFromDOM: ALIGN_FROM_DOM },
+      { tag: "h2", attrs: { level: 2 }, attrsFromDOM: ALIGN_FROM_DOM },
+      { tag: "h3", attrs: { level: 3 }, attrsFromDOM: ALIGN_FROM_DOM },
+      { tag: "h4", attrs: { level: 4 }, attrsFromDOM: ALIGN_FROM_DOM },
     ],
-    toDOM: (node) => [headingTag(node.attrs.level), 0],
+    toDOM: (node) => [headingTag(node.attrs.level), ...alignAttributes(node.attrs.align), 0],
   },
 
   blockquote: {

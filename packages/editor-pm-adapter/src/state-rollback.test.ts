@@ -6,7 +6,9 @@ import { EditorSession } from "./session";
 
 const doc: NodeJSON = {
   type: "doc",
-  content: [{ type: "paragraph", content: [{ type: "text", text: "一二三四五" }] }],
+  content: [
+    { type: "paragraph", attrs: { align: null }, content: [{ type: "text", text: "一二三四五" }] },
+  ],
 };
 
 function createSession(onChange = vi.fn()) {

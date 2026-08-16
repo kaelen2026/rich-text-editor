@@ -1,6 +1,7 @@
 [
   {
     "type": "paragraph",
+    "attrs": { "align": null },
     "content": [
       { "type": "text", "marks": [{ "type": "strong" }], "text": "Google Docs" },
       { "type": "text", "text": " 内容" }

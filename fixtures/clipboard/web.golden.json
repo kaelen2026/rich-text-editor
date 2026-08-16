@@ -1,11 +1,12 @@
 [
   {
     "type": "heading",
-    "attrs": { "level": 2 },
+    "attrs": { "level": 2, "align": null },
     "content": [{ "type": "text", "text": "网页标题" }]
   },
   {
     "type": "paragraph",
+    "attrs": { "align": null },
     "content": [{ "type": "text", "marks": [{ "type": "em" }], "text": "网页正文" }]
   }
 ]

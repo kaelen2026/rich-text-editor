@@ -25,7 +25,13 @@ describe("表格插件", () => {
                   {
                     type: "co_table_header",
                     attrs: { colspan: 2, rowspan: 1, colwidth: null },
-                    content: [{ type: "paragraph", content: [{ type: "text", text: "表头" }] }],
+                    content: [
+                      {
+                        type: "paragraph",
+                        attrs: { align: null },
+                        content: [{ type: "text", text: "表头" }],
+                      },
+                    ],
                   },
                 ],
               },
@@ -58,7 +64,9 @@ describe("表格插件", () => {
     editor.subscribe("patch", (patch) => patches.push(patch));
     editor.loadDocument({
       type: "doc",
-      content: [{ type: "paragraph", content: [{ type: "text", text: "插入点" }] }],
+      content: [
+        { type: "paragraph", attrs: { align: null }, content: [{ type: "text", text: "插入点" }] },
+      ],
     });
 
     expect(editor.execute("table.insert", { rows: 2, cols: 3, withHeaderRow: true })).toEqual({
@@ -113,12 +121,24 @@ describe("表格插件", () => {
                 {
                   type: "co_table_header",
                   attrs: { colspan: 2, rowspan: 1, colwidth: null },
-                  content: [{ type: "paragraph", content: [{ type: "text", text: "表头" }] }],
+                  content: [
+                    {
+                      type: "paragraph",
+                      attrs: { align: null },
+                      content: [{ type: "text", text: "表头" }],
+                    },
+                  ],
                 },
                 {
                   type: "co_table_cell",
                   attrs: { colspan: 1, rowspan: 1000, colwidth: null },
-                  content: [{ type: "paragraph", content: [{ type: "text", text: "内容" }] }],
+                  content: [
+                    {
+                      type: "paragraph",
+                      attrs: { align: null },
+                      content: [{ type: "text", text: "内容" }],
+                    },
+                  ],
                 },
               ],
             },

@@ -65,12 +65,14 @@ function appendBlock(document: Document, parent: HTMLElement, node: Node, schema
   }
   if (tag === "p" || blockTags.has(tag)) {
     const paragraph = document.createElement("p");
+    copyAlign(element, paragraph);
     appendInlineChildren(document, paragraph, element, schema);
     appendIfMeaningful(parent, paragraph);
     return;
   }
   if (/^h[1-6]$/.test(tag)) {
     const heading = document.createElement(`h${Math.min(Number(tag[1]), 4)}`);
+    copyAlign(element, heading);
     appendInlineChildren(document, heading, element, schema);
     appendIfMeaningful(parent, heading);
     return;
@@ -291,6 +293,34 @@ function appendInline(document: Document, parent: HTMLElement, node: Node, schem
   }
   appendInlineChildren(document, parent, element, schema);
 }
+
+/**
+ * 把外部块的对齐搬到重建出来的块上。
+ *
+ * 重建的 DOM 里只留 `data-align` 这一个白名单化的值，源文档的 `style` 串一律不带过来：
+ * 这条管线的前提就是"输出 DOM 完全由白名单节点构建"，放行任意样式会把它废掉。
+ * `start`/`end` 归到 `left`/`right`，Schema 的取值白名单只认这四个物理方向。
+ */
+function copyAlign(source: Element, target: HTMLElement): void {
+  // 读 style 用鸭子类型而不是 `instanceof HTMLElement`：解析出来的 inert document
+  // 可能来自另一个 realm（测试里就是 JSDOM），跨 realm 的构造器判断一律为假。
+  const inlineAlign = (source as Partial<HTMLElement>).style?.textAlign ?? "";
+  const raw = (source.getAttribute("align") ?? inlineAlign).trim().toLowerCase();
+  const align = externalAlignments.get(raw);
+  if (align) {
+    target.setAttribute("data-align", align);
+  }
+}
+
+/** 用 Map 而不是对象字面量：`align="constructor"` 不该查出一个原型上的值。 */
+const externalAlignments = new Map([
+  ["left", "left"],
+  ["center", "center"],
+  ["right", "right"],
+  ["justify", "justify"],
+  ["start", "left"],
+  ["end", "right"],
+]);
 
 function appendTextParagraph(document: Document, parent: HTMLElement, text: string | null): void {
   const paragraph = document.createElement("p");

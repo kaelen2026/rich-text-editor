@@ -37,7 +37,7 @@ function docWithCard(): EditorEnvelope {
     doc: {
       type: "doc",
       content: [
-        { type: "paragraph", content: [{ type: "text", text: "正文" }] },
+        { type: "paragraph", attrs: { align: null }, content: [{ type: "text", text: "正文" }] },
         { type: CARD, content: [{ type: "text", text: "卡片" }] },
       ],
     },

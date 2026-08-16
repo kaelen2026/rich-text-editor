@@ -1,11 +1,12 @@
 [
   {
     "type": "heading",
-    "attrs": { "level": 1 },
+    "attrs": { "level": 1, "align": null },
     "content": [{ "type": "text", "text": "会议纪要" }]
   },
   {
     "type": "paragraph",
+    "attrs": { "align": null },
     "content": [
       { "type": "text", "marks": [{ "type": "strong" }], "text": "结论：" },
       {
@@ -20,7 +21,13 @@
     "content": [
       {
         "type": "list_item",
-        "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "第一项" }] }]
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": { "align": null },
+            "content": [{ "type": "text", "text": "第一项" }]
+          }
+        ]
       }
     ]
   }

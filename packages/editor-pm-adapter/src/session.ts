@@ -1,9 +1,10 @@
+import type { BlockAlign } from "@kaelen/editor-schema";
 import type { EditorMode, NodeJSON, SelectionSnapshot } from "@kaelen/editor-shared-types";
 import { type MarkType, Node as ProseMirrorNode, type Schema } from "prosemirror-model";
 import { type Command, EditorState, type Plugin, type Transaction } from "prosemirror-state";
 import { Mapping } from "prosemirror-transform";
 import { type DirectEditorProps, EditorView } from "prosemirror-view";
-import { isBlockOfType, isCheckedTaskItem, isWithinNode } from "./block-commands";
+import { isBlockAligned, isBlockOfType, isCheckedTaskItem, isWithinNode } from "./block-commands";
 import {
   type ClipboardNotice,
   type ClipboardPayloadMeta,
@@ -288,6 +289,11 @@ export class EditorSession {
   /** 选区覆盖的文本块是否都是该类型（并且属性一致）。 */
   isBlockActive(nodeName: string, attrs?: Record<string, unknown>): boolean {
     return isBlockOfType(this.state, nodeName, attrs);
+  }
+
+  /** 选区内可对齐的文本块是否都是该对齐。 */
+  isAligned(align: BlockAlign | null): boolean {
+    return isBlockAligned(this.state, align);
   }
 
   /** 选区是否位于某个结构容器（引用、列表）之内。 */

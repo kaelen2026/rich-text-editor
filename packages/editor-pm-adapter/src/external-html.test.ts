@@ -29,11 +29,12 @@ describe("外部 HTML 粘贴", () => {
         expect(slice.content.toJSON()).toEqual([
           {
             type: "heading",
-            attrs: { level: 4 },
+            attrs: { level: 4, align: null },
             content: [{ type: "text", text: "标题" }],
           },
           {
             type: "paragraph",
+            attrs: { align: null },
             content: [{ type: "text", text: "危险" }],
           },
         ]);
@@ -66,6 +67,7 @@ describe("外部 HTML 粘贴", () => {
               content: [
                 {
                   type: "paragraph",
+                  attrs: { align: null },
                   content: [
                     { type: "text", marks: [{ type: "strong" }], text: "粗体" },
                     { type: "text", text: " " },
@@ -90,6 +92,35 @@ describe("外部 HTML 粘贴", () => {
     });
   });
 
+  it("保留外部块的对齐，样式串本身不跟进文档", () => {
+    usingDOM(() => {
+      const slice = parseExternalHTML(
+        schema,
+        '<p style="text-align:center;color:red">居中</p>' +
+          '<h2 align="RIGHT">标题</h2>' +
+          '<p style="text-align:start">起始</p>' +
+          '<p style="text-align:inherit">继承</p>' +
+          '<p align="center;background:url(https://tracker.example)">伪造</p>',
+      );
+
+      expect(slice.content.toJSON()).toEqual([
+        {
+          type: "paragraph",
+          attrs: { align: "center" },
+          content: [{ type: "text", text: "居中" }],
+        },
+        {
+          type: "heading",
+          attrs: { level: 2, align: "right" },
+          content: [{ type: "text", text: "标题" }],
+        },
+        { type: "paragraph", attrs: { align: "left" }, content: [{ type: "text", text: "起始" }] },
+        { type: "paragraph", attrs: { align: null }, content: [{ type: "text", text: "继承" }] },
+        { type: "paragraph", attrs: { align: null }, content: [{ type: "text", text: "伪造" }] },
+      ]);
+    });
+  });
+
   it("将当前不支持的表格和未知块完整降级为段落文本", () => {
     usingDOM(() => {
       const slice = parseExternalHTML(
@@ -98,8 +129,8 @@ describe("外部 HTML 粘贴", () => {
       );
 
       expect(slice.content.toJSON()).toEqual([
-        { type: "paragraph", content: [{ type: "text", text: "甲乙" }] },
-        { type: "paragraph", content: [{ type: "text", text: "丙 丁" }] },
+        { type: "paragraph", attrs: { align: null }, content: [{ type: "text", text: "甲乙" }] },
+        { type: "paragraph", attrs: { align: null }, content: [{ type: "text", text: "丙 丁" }] },
       ]);
     });
   });

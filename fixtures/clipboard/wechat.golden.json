@@ -1,8 +1,12 @@
 [
   {
     "type": "heading",
-    "attrs": { "level": 3 },
+    "attrs": { "level": 3, "align": null },
     "content": [{ "type": "text", "text": "公众号标题" }]
   },
-  { "type": "paragraph", "content": [{ "type": "text", "text": "正文内容" }] }
+  {
+    "type": "paragraph",
+    "attrs": { "align": null },
+    "content": [{ "type": "text", "text": "正文内容" }]
+  }
 ]

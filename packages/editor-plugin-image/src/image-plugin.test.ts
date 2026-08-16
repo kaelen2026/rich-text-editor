@@ -10,7 +10,12 @@ const document = {
   envelope: 1,
   schemaVersion: 1,
   plugins: {},
-  doc: { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "前文" }] }] },
+  doc: {
+    type: "doc",
+    content: [
+      { type: "paragraph", attrs: { align: null }, content: [{ type: "text", text: "前文" }] },
+    ],
+  },
   annotations: [],
 };
 
@@ -42,7 +47,7 @@ const documentWithImage = {
     type: "doc",
     content: [
       { type: "co_image", attrs: { src: "https://cdn.example/a.png", alt: "花" } },
-      { type: "paragraph", content: [{ type: "text", text: "后文" }] },
+      { type: "paragraph", attrs: { align: null }, content: [{ type: "text", text: "后文" }] },
     ],
   },
   annotations: [],
@@ -64,7 +69,7 @@ function editorWithImage(
           type: "co_image",
           attrs: { ...documentWithImage.doc.content[0]?.attrs, ...attrs },
         },
-        { type: "paragraph", content: [{ type: "text", text: "后文" }] },
+        { type: "paragraph", attrs: { align: null }, content: [{ type: "text", text: "后文" }] },
       ],
     },
   });
@@ -126,7 +131,7 @@ describe("图片上传插件", () => {
           type: "co_image",
           attrs: { ...EDIT_DEFAULTS, src: "", alt: "flower.png", width: null, height: null },
         },
-        { type: "paragraph", content: [{ type: "text", text: "前文" }] },
+        { type: "paragraph", attrs: { align: null }, content: [{ type: "text", text: "前文" }] },
       ],
     });
 
