@@ -64,6 +64,57 @@ describe("EditorToolbar", () => {
     expect(italic.tabIndex).toBe(0);
   });
 
+  it("宿主可以自定义按钮内容，可访问名仍然是 label 而不是带快捷键的 tooltip", () => {
+    const editor = createEditor();
+    const iconDefinition: ToolbarDefinition = {
+      label: "格式工具栏",
+      groups: [
+        {
+          label: "文本格式",
+          items: [{ id: "bold", label: "加粗", command: "format.bold", shortcut: "Mod-B" }],
+        },
+      ],
+    };
+    render(
+      <EditorProvider editor={editor}>
+        <EditorToolbar
+          definition={iconDefinition}
+          renderLabel={(item) => (
+            <span aria-hidden="true" data-testid={`icon-${item.id}`}>
+              ◆
+            </span>
+          )}
+        />
+      </EditorProvider>,
+    );
+
+    const bold = screen.getByRole("button", { name: "加粗" });
+    expect(bold.getAttribute("title")).toBe("加粗（Mod-B）");
+    expect(bold.querySelector('[data-testid="icon-bold"]')).toBeTruthy();
+    expect(bold.textContent).toBe("◆");
+  });
+
+  it("宿主自己画 tooltip 时可以关掉原生 title，避免两个提示叠在一起", () => {
+    const editor = createEditor();
+    const iconDefinition: ToolbarDefinition = {
+      label: "格式工具栏",
+      groups: [
+        {
+          label: "文本格式",
+          items: [{ id: "bold", label: "加粗", command: "format.bold", shortcut: "Mod-B" }],
+        },
+      ],
+    };
+    render(
+      <EditorProvider editor={editor}>
+        <EditorToolbar definition={iconDefinition} nativeTooltip={false} />
+      </EditorProvider>,
+    );
+
+    const bold = screen.getByRole("button", { name: "加粗" });
+    expect(bold.hasAttribute("title")).toBe(false);
+  });
+
   it("在菜单中按 Escape 关闭并将焦点还给触发按钮", () => {
     const editor = createEditor();
     const menuDefinition: ToolbarDefinition = {
