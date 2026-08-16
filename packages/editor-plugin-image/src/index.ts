@@ -1,7 +1,23 @@
 export {
+  composeCrop,
+  croppedNaturalSize,
+  displaySize,
+  IMAGE_FILTERS,
+  type ImageAlign,
+  type ImageAttrs,
+  type ImageCrop,
+  type ImageFilter,
+  type ImageLayout,
+  type ImageRotation,
+  imageLayout,
+  normalizeImageAttrs,
+  readCrop,
+} from "./image-attrs";
+export {
   type AssetUploader,
   createImagePlugin,
   type ImagePluginOptions,
+  type ImageUploadMode,
   type ImageUploadRecord,
   type ImageUploadState,
   type ImageUploadStatus,

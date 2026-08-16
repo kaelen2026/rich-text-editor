@@ -3,7 +3,7 @@
   "schemaVersion": 1,
   "plugins": {
     "color": 1,
-    "image": 1,
+    "image": 2,
     "link": 1,
     "table": 1
   },
@@ -79,7 +79,17 @@
           "src": "https://cdn.example.com/image.png",
           "alt": "示例图片",
           "width": 640,
-          "height": 480
+          "height": 480,
+          "displayWidth": 320,
+          "crop": {
+            "x": 0.1,
+            "y": 0.1,
+            "width": 0.8,
+            "height": 0.6
+          },
+          "rotate": 0,
+          "filter": "grayscale",
+          "align": "right"
         }
       }
     ]
