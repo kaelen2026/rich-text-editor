@@ -12,6 +12,16 @@ export interface EditorToolbarProps {
   className?: string;
   /** Render a menu's contents. Escape always returns focus to its trigger. */
   renderMenu?: (item: ToolbarItemState, close: () => void) => ReactNode;
+  /**
+   * Replace a button's visible content, for example with an icon. The accessible
+   * name stays `item.label`, so icon-only toolbars keep their screen reader text.
+   */
+  renderLabel?: (item: ToolbarItemState) => ReactNode;
+  /**
+   * Set to false when the host draws its own tooltip. The native `title` tooltip would
+   * otherwise appear on top of it a second later. The accessible name is unaffected.
+   */
+  nativeTooltip?: boolean;
   /** Allows hosts to supply a native file picker or another non-command action. */
   onExecute?: (item: ToolbarItemState) => boolean | undefined;
 }
@@ -24,6 +34,8 @@ export function EditorToolbar({
   definition,
   className,
   renderMenu,
+  renderLabel,
+  nativeTooltip = true,
   onExecute,
 }: EditorToolbarProps) {
   const editor = useEditor();
@@ -75,6 +87,7 @@ export function EditorToolbar({
                   aria-controls={item.menu ? menuId : undefined}
                   aria-expanded={item.menu ? item.expanded : undefined}
                   aria-haspopup={item.menu ? "menu" : undefined}
+                  aria-label={item.label}
                   aria-pressed={item.menu ? undefined : item.active}
                   data-active={item.active}
                   data-value={item.value ?? undefined}
@@ -98,10 +111,16 @@ export function EditorToolbar({
                     }
                   }}
                   tabIndex={item.tabIndex}
-                  title={item.shortcut ? `${item.label}（${item.shortcut}）` : item.label}
+                  title={
+                    nativeTooltip
+                      ? item.shortcut
+                        ? `${item.label}（${item.shortcut}）`
+                        : item.label
+                      : undefined
+                  }
                   type="button"
                 >
-                  {item.label}
+                  {renderLabel ? renderLabel(item) : item.label}
                 </button>
                 {item.menu && item.expanded && renderMenu ? (
                   <div

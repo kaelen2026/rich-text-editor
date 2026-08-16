@@ -14,6 +14,43 @@ import { EditorToolbar } from "@kaelen/editor-react-ui";
 import { createEmptyEnvelope, stringifyEnvelope } from "@kaelen/editor-schema";
 import type { DocumentPatch, EditorEnvelope, EditorMode } from "@kaelen/editor-shared-types";
 import type { ToolbarDefinition } from "@kaelen/editor-ui-model";
+import {
+  Bold,
+  ChevronRight,
+  Code,
+  CodeXml,
+  Columns3,
+  FlaskConical,
+  Heading1,
+  Heading2,
+  Heading3,
+  Heading4,
+  Image,
+  Italic,
+  Link,
+  List,
+  ListIndentDecrease,
+  ListIndentIncrease,
+  ListOrdered,
+  ListTodo,
+  type LucideIcon,
+  Merge,
+  Minus,
+  Pilcrow,
+  Redo2,
+  Rows3,
+  Save,
+  Split,
+  SquareCheckBig,
+  Strikethrough,
+  Table,
+  TextQuote,
+  Trash2,
+  Underline,
+  Undo2,
+  Unlink,
+  Zap,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 const STORAGE_KEY = "playground.document";
@@ -112,17 +149,17 @@ const toolbarDefinition: ToolbarDefinition = {
       items: [
         {
           id: "bullet-list",
-          label: "• 列表",
+          label: "无序列表",
           command: "list.toggleBullet",
           shortcut: "Mod-Shift-8",
         },
         {
           id: "ordered-list",
-          label: "1. 列表",
+          label: "有序列表",
           command: "list.toggleOrdered",
           shortcut: "Mod-Shift-9",
         },
-        { id: "task-list", label: "☐ 待办", command: "list.toggleTask", shortcut: "Mod-Shift-7" },
+        { id: "task-list", label: "待办列表", command: "list.toggleTask", shortcut: "Mod-Shift-7" },
         { id: "checked", label: "勾选", command: "list.toggleChecked" },
         { id: "indent", label: "缩进", command: "list.indent", shortcut: "Tab" },
         { id: "outdent", label: "提升", command: "list.outdent", shortcut: "Shift-Tab" },
@@ -161,6 +198,66 @@ const toolbarDefinition: ToolbarDefinition = {
     },
   ],
 };
+
+/**
+ * 工具栏按钮的图标。文字 label 不丢：它继续当 aria-label 和 tooltip，
+ * 没有映射到图标的按钮自动回落成文字。
+ */
+const TOOLBAR_ICONS: Record<string, LucideIcon> = {
+  paragraph: Pilcrow,
+  "heading-1": Heading1,
+  "heading-2": Heading2,
+  "heading-3": Heading3,
+  "heading-4": Heading4,
+  quote: TextQuote,
+  "code-block": CodeXml,
+  rule: Minus,
+  "bullet-list": List,
+  "ordered-list": ListOrdered,
+  "task-list": ListTodo,
+  checked: SquareCheckBig,
+  indent: ListIndentIncrease,
+  outdent: ListIndentDecrease,
+  bold: Bold,
+  italic: Italic,
+  underline: Underline,
+  strike: Strikethrough,
+  "inline-code": Code,
+  link: Link,
+  unlink: Unlink,
+  image: Image,
+  undo: Undo2,
+  redo: Redo2,
+  "insert-table": Table,
+  "add-row": Rows3,
+  "add-column": Columns3,
+  "merge-cells": Merge,
+  "split-cell": Split,
+  "delete-table": Trash2,
+};
+
+const APPLE = /mac|iphone|ipad/i.test(navigator.platform || navigator.userAgent);
+
+/** 把 ToolbarDefinition 里的 "Mod-Shift-X" 排成 tooltip 里能一眼扫的 "⌘⇧X"。 */
+function formatShortcut(shortcut: string): string {
+  const keys = shortcut.split("-");
+  const last = keys.pop() ?? "";
+  const modifiers = keys
+    .map((key) => {
+      if (key === "Mod") {
+        return APPLE ? "⌘" : "Ctrl+";
+      }
+      if (key === "Shift") {
+        return APPLE ? "⇧" : "Shift+";
+      }
+      if (key === "Alt") {
+        return APPLE ? "⌥" : "Alt+";
+      }
+      return APPLE ? key : `${key}+`;
+    })
+    .join("");
+  return `${modifiers}${last.length === 1 ? last.toUpperCase() : last}`;
+}
 
 /** 模拟一份由"已安装表格与提及插件"的环境写出的文档。 */
 const UNKNOWN_SAMPLE: EditorEnvelope = {
@@ -241,7 +338,7 @@ function ModeSwitch() {
   const editor = useEditor();
   const mode = useEditorSelector((snapshot) => snapshot.mode);
   return (
-    <label className="mode">
+    <label className="field">
       状态
       <select value={mode} onChange={(event) => editor.setMode(event.target.value as EditorMode)}>
         <option value="edit">编辑</option>
@@ -259,7 +356,7 @@ function DegradedBanner() {
     return null;
   }
   return (
-    <div className="degraded" role="status">
+    <div className="banner banner-danger" role="status">
       <strong>部分功能暂时不可用，内容已保留：</strong>
       <ul>
         {errors.map((error, index) => (
@@ -270,26 +367,53 @@ function DegradedBanner() {
   );
 }
 
-function Toolbar({
+/** 状态槽位：每种状态同字号同高度，只换颜色和圆点，切换时不跳动。 */
+function StatusStrip() {
+  const dirty = useEditorSelector((snapshot) => snapshot.dirty);
+  const revision = useEditorSelector((snapshot) => snapshot.revision);
+  const composing = useEditorSelector((snapshot) => snapshot.composing);
+  return (
+    <span className={dirty ? "status status-dirty" : "status"}>
+      <span className="status-dot" />
+      修订号 {revision} · {dirty ? "未保存" : "已保存"}
+      {composing ? <span className="status-composing"> · 输入法组合中，命令已暂停</span> : null}
+    </span>
+  );
+}
+
+function Chrome({
   onSave,
   onLoadSample,
   faulty,
+  onToggleFault,
 }: {
   onSave: () => void;
   onLoadSample: () => void;
   faulty: boolean;
+  onToggleFault: (next: boolean) => void;
 }) {
   const editor = useEditor();
-  const dirty = useEditorSelector((snapshot) => snapshot.dirty);
-  const revision = useEditorSelector((snapshot) => snapshot.revision);
-  const composing = useEditorSelector((snapshot) => snapshot.composing);
   const imageInput = useRef<HTMLInputElement>(null);
 
   return (
-    <>
+    <div className="chrome">
       <EditorToolbar
         className="toolbar"
         definition={toolbarDefinition}
+        nativeTooltip={false}
+        renderLabel={(item) => {
+          const Icon = TOOLBAR_ICONS[item.id];
+          return (
+            <>
+              {Icon ? <Icon aria-hidden="true" size={16} strokeWidth={1.75} /> : item.label}
+              {/* 按钮的可访问名由 aria-label 给，这层纯装饰，读屏不该再念一遍。 */}
+              <span aria-hidden="true" className="tip">
+                {item.label}
+                {item.shortcut ? <kbd>{formatShortcut(item.shortcut)}</kbd> : null}
+              </span>
+            </>
+          );
+        }}
         onExecute={(item) => {
           if (item.id === "link") {
             const href = window.prompt("链接地址（仅 https/http/mailto/tel）", "https://");
@@ -320,25 +444,36 @@ function Toolbar({
           event.currentTarget.value = "";
         }}
       />
-      <div className="toolbar">
+      <div className="env">
         <ModeSwitch />
-        <button type="button" onClick={onSave}>
+        <button type="button" className="action action-primary" onClick={onSave}>
+          <Save aria-hidden="true" size={14} strokeWidth={1.75} />
           保存
         </button>
-        <button type="button" onClick={onLoadSample}>
+        <button type="button" className="action" onClick={onLoadSample}>
+          <FlaskConical aria-hidden="true" size={14} strokeWidth={1.75} />
           装载含未知节点的示例
         </button>
+        <label className="field" title="重名、缺依赖、循环依赖、覆盖核心命令、命令抛错">
+          <input
+            type="checkbox"
+            checked={faulty}
+            onChange={(event) => onToggleFault(event.target.checked)}
+          />
+          注入故障插件
+        </label>
         {faulty ? (
-          <button type="button" onClick={() => editor.execute("fault.crash")}>
+          <button
+            type="button"
+            className="action action-danger"
+            onClick={() => editor.execute("fault.crash")}
+          >
+            <Zap aria-hidden="true" size={14} strokeWidth={1.75} />
             触发插件故障
           </button>
         ) : null}
-        <span className="status">
-          修订号 {revision} · {dirty ? "未保存" : "已保存"}
-          {composing ? " · 输入法组合中（命令已暂停）" : ""}
-        </span>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -376,21 +511,31 @@ function PatchPanel({ baseDocument }: { baseDocument: EditorEnvelope }) {
   }
 
   return (
-    <section className="patch-panel">
-      <div className="patch-heading">
-        <strong>DocumentPatch 增量流</strong>
-        <button type="button" onClick={replayAll} disabled={patches.length === 0}>
+    <details className="console">
+      <summary>
+        <ChevronRight aria-hidden="true" className="disclosure" size={14} strokeWidth={2} />
+        <span className="console-title">DocumentPatch 增量流</span>
+        <span>{patches.length} 条</span>
+        <StatusStrip />
+      </summary>
+      <div className="console-body">
+        <p>
+          {patches.length === 0
+            ? "编辑后会显示增量，不会输出全文。"
+            : `已捕获 ${patches.length} 条 patch。`}
+        </p>
+        <button
+          type="button"
+          className="action"
+          onClick={replayAll}
+          disabled={patches.length === 0}
+        >
           从初始文档重放全部 patch
         </button>
+        {patches.length > 0 ? <pre>{JSON.stringify(patches, null, 2)}</pre> : null}
+        {replay ? <pre>{replay}</pre> : null}
       </div>
-      <p>
-        {patches.length === 0
-          ? "编辑后会显示增量，不会输出全文。"
-          : `已捕获 ${patches.length} 条 patch。`}
-      </p>
-      {patches.length > 0 ? <pre>{JSON.stringify(patches, null, 2)}</pre> : null}
-      {replay ? <pre>{replay}</pre> : null}
-    </section>
+    </details>
   );
 }
 
@@ -424,33 +569,50 @@ export function App() {
   return (
     <EditorProvider editor={editor}>
       <main>
-        <h1>富文本编辑器 · 输入规则、图片上传、组合态与插件熔断</h1>
-        <p className="hint">
-          {
-            "标题、引用、列表、待办、代码块、分隔线都在工具栏上，按钮的 tooltip 是对应快捷键；列表里 Tab / Shift+Tab 升降级，Shift+Enter 软换行。点“图片”选择本地文件，或把图片拖入/粘贴到编辑区：上传中会显示占位，完成后回填；上传期间继续编辑，目标位置会随事务迁移。复制上传中图片不会复制运行时 uploadId。输入 #、-、1.、> 或 ``` 加空格可触发结构规则；中文/日文等输入法组合期间工具栏会暂停，并在候选词确认后恢复。复制会把可还原的 Slice 写入 HTML 的 data-co-slice，粘贴时优先恢复它；Cmd/Ctrl+Shift+V 与代码块内粘贴始终只取纯文本。切换状态可以看只读态与禁用态的区别；点保存写入 localStorage，刷新页面内容仍在。"
-          }
-        </p>
-        <label className="switch">
-          <input
-            type="checkbox"
-            checked={faulty}
-            onChange={(event) => toggleFault(event.target.checked)}
-          />
-          注入故障插件（重名、缺依赖、循环依赖、覆盖核心命令、命令抛错）
-        </label>
+        <h1 className="page-title">富文本编辑器 · 输入规则、图片上传、组合态与插件熔断</h1>
+        <details className="notes">
+          <summary>
+            <ChevronRight aria-hidden="true" className="disclosure" size={14} strokeWidth={2} />
+            使用说明与快捷键
+          </summary>
+          <p className="notes-body">
+            {
+              "标题、引用、列表、待办、代码块、分隔线都在工具栏上，按钮的 tooltip 是对应快捷键；列表里 Tab / Shift+Tab 升降级，Shift+Enter 软换行。点“图片”选择本地文件，或把图片拖入/粘贴到编辑区：上传中会显示占位，完成后回填；上传期间继续编辑，目标位置会随事务迁移。复制上传中图片不会复制运行时 uploadId。输入 #、-、1.、> 或 ``` 加空格可触发结构规则；中文/日文等输入法组合期间工具栏会暂停，并在候选词确认后恢复。复制会把可还原的 Slice 写入 HTML 的 data-co-slice，粘贴时优先恢复它；Cmd/Ctrl+Shift+V 与代码块内粘贴始终只取纯文本。切换状态可以看只读态与禁用态的区别；点保存写入 localStorage，刷新页面内容仍在。勾选“注入故障插件”会装入一批坏掉的第三方插件：重名、缺依赖、循环依赖、覆盖核心命令、命令抛错，用来看熔断，每种坏法都只让它自己失效。"
+            }
+          </p>
+        </details>
         <DegradedBanner />
         {unknownNodes.length > 0 ? (
-          <p className="warning">
+          <p className="banner banner-warn">
             部分内容以只读形式显示，需要这些功能才能编辑：{unknownNodes.join("、")}
             。保存时这些内容会原样写回，不会丢失。
           </p>
         ) : null}
-        <Toolbar onSave={save} onLoadSample={loadSample} faulty={faulty} />
-        <div className="surface">
-          <EditorContent />
+        <div className="workbench">
+          <Chrome
+            onSave={save}
+            onLoadSample={loadSample}
+            faulty={faulty}
+            onToggleFault={toggleFault}
+          />
+          <div className="stage">
+            <div className="paper">
+              <EditorContent />
+            </div>
+          </div>
         </div>
         <PatchPanel baseDocument={baseDocument} />
-        {saved ? <pre>{saved}</pre> : null}
+        {saved ? (
+          <details className="console">
+            <summary>
+              <ChevronRight aria-hidden="true" className="disclosure" size={14} strokeWidth={2} />
+              <span className="console-title">已写入 localStorage 的文档</span>
+            </summary>
+            <div className="console-body">
+              <pre>{saved}</pre>
+            </div>
+          </details>
+        ) : null}
       </main>
     </EditorProvider>
   );
