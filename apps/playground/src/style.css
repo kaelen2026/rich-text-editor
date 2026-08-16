@@ -1,79 +1,836 @@
+/*
+ * Playground 视觉方向：纸 + 控制台。
+ * 编辑区是一张有厚度的纸，压在暖灰底上；工具条、状态、patch 流退成安静的界面层。
+ * 三层字体各司其职：纸用衬线，界面用系统无衬线，控制台用等宽。
+ * 分层靠背景明度台阶（canvas 95.5% → chrome 97.8% → paper 100%）和一层柔阴影，不靠描边。
+ */
+
+:root {
+  color-scheme: light;
+
+  --canvas: oklch(95.5% 0.006 85);
+  --chrome: oklch(97.8% 0.004 85);
+  --paper: oklch(100% 0 0);
+  --console: oklch(97% 0.003 265);
+
+  --ink: oklch(27% 0.012 265);
+  --ink-soft: oklch(46% 0.014 265);
+  --ink-faint: oklch(62% 0.012 265);
+
+  --hairline: oklch(89% 0.006 85);
+  --hairline-strong: oklch(84% 0.008 265);
+
+  --accent: oklch(52% 0.16 262);
+  --accent-wash: oklch(52% 0.16 262 / 0.09);
+  --warn: oklch(56% 0.13 72);
+  --warn-wash: oklch(56% 0.13 72 / 0.1);
+  --danger: oklch(54% 0.18 25);
+  --danger-wash: oklch(54% 0.18 25 / 0.08);
+
+  /* 间距只有这一把尺子，组件里不再出现裸数值。 */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --s6: 32px;
+  --s7: 48px;
+
+  --radius: 10px;
+  --radius-sm: 6px;
+  --radius-xs: 4px;
+
+  --font-ui: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-paper: "Iowan Old Style", "Source Serif 4", Georgia, "Songti SC", "Noto Serif SC", serif;
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+
+  /* lucide square / square-check-big，给待办勾选框当 mask 用。 */
+  --icon-square: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='18' height='18' x='3' y='3' rx='2'/%3E%3C/svg%3E");
+  --icon-square-check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344'/%3E%3Cpath d='m9 11 3 3L22 4'/%3E%3C/svg%3E");
+
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --lift: 0 1px 2px oklch(27% 0.012 265 / 0.05), 0 12px 28px -16px oklch(27% 0.012 265 / 0.3);
+  --lift-focus: 0 1px 2px oklch(27% 0.012 265 / 0.06), 0 20px 40px -18px oklch(27% 0.012 265 / 0.4);
+
+  font-family: var(--font-ui);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: var(--s6) var(--s5) var(--s7);
+  background: var(--canvas);
+  color: var(--ink);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+
+main {
+  max-width: 940px;
+  margin-inline: auto;
+}
+
+/* ── 页头 ─────────────────────────────────────────────── */
+
+.page-title {
+  margin: 0 0 var(--s2);
+  font-family: var(--font-paper);
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.25;
+}
+
+.notes {
+  margin: 0 0 var(--s5);
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.notes > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  padding: var(--s1) 0;
+  color: var(--ink-soft);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.notes > summary::-webkit-details-marker {
+  display: none;
+}
+
+.disclosure {
+  flex: none;
+  color: var(--ink-faint);
+  transition: transform 140ms var(--ease);
+}
+
+details[open] > summary .disclosure {
+  transform: rotate(90deg);
+}
+
+.notes > summary:hover {
+  color: var(--ink);
+}
+
+.notes-body {
+  max-width: 72ch;
+  margin: var(--s2) 0 0;
+  padding-inline-start: var(--s3);
+  border-inline-start: 2px solid var(--hairline);
+  line-height: 1.85;
+}
+
+/* ── 提示条：左侧色条代替整框描边，不和纸抢分量 ────────── */
+
+.banner {
+  margin: 0 0 var(--s3);
+  padding: var(--s2) var(--s3);
+  border-radius: var(--radius-sm);
+  border-inline-start: 3px solid;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.banner-warn {
+  border-color: var(--warn);
+  background: var(--warn-wash);
+}
+
+.banner-danger {
+  border-color: var(--danger);
+  background: var(--danger-wash);
+}
+
+.banner ul {
+  margin: var(--s1) 0 0;
+  padding-inline-start: var(--s4);
+}
+
+.banner strong {
+  font-weight: 600;
+}
+
+/* ── 工作台外壳 ───────────────────────────────────────── */
+
+/* 不用 overflow: hidden 来切圆角，否则工具栏的 tooltip 会被外壳裁掉。 */
+.workbench {
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+}
+
+.chrome {
+  padding: var(--s3) var(--s4);
+  border-block-end: 1px solid var(--hairline);
+  border-start-start-radius: calc(var(--radius) - 1px);
+  border-start-end-radius: calc(var(--radius) - 1px);
+  background: var(--chrome);
+}
+
+/*
+ * 组之间靠 16px 间距分隔，不用竖线：图标按钮换行时，竖分隔线会掉在行首或行尾，
+ * 间距不会。
+ */
 .toolbar {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-block: 0.75rem;
+  gap: var(--s2) var(--s4);
 }
 
 .editor-toolbar-group {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.25rem;
+  gap: 2px;
   min-inline-size: 0;
   margin: 0;
-  padding-block: 0;
-  padding-inline-end: 0.5rem;
+  padding: 0;
   border: 0;
-  border-inline-end: 1px solid #6b7280;
 }
 
-.editor-toolbar-group:last-child {
-  border-inline-end: 0;
+.editor-toolbar-item {
+  position: relative;
+  display: inline-flex;
 }
 
-button,
-select {
-  min-height: 2.25rem;
-  border: 1px solid #4b5563;
-  border-radius: 0.25rem;
-  background: #ffffff;
-  color: #1f2937;
+/*
+ * 图标按钮自己带 tooltip：原生 title 要等一秒才出，还排不下快捷键。
+ * 挂在按钮下方，不在上方，免得第一行的提示顶到工作台外面去。
+ */
+.tip {
+  position: absolute;
+  inset-block-start: calc(100% + 6px);
+  inset-inline-start: 50%;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: 5px var(--s2);
+  border-radius: 5px;
+  background: var(--ink);
+  color: oklch(98% 0 0);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  line-height: 1.3;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translate(-50%, -3px);
+  transition:
+    opacity 110ms var(--ease),
+    transform 110ms var(--ease),
+    visibility 110ms;
+}
+
+.tip kbd {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: oklch(80% 0.01 265);
+}
+
+.toolbar button:hover .tip,
+.toolbar button:focus-visible .tip {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-50%, 0);
+}
+
+/* 格式按钮：正方形图标槽，无底无边，只有 hover 和 active 有材质。 */
+.toolbar button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s1);
+  min-inline-size: 28px;
+  min-block-size: 28px;
+  padding: 0 5px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--ink);
   font: inherit;
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 120ms var(--ease),
+    color 120ms var(--ease);
 }
 
-button[data-active="true"] {
-  border-color: #0f4c81;
-  background: #0f4c81;
-  color: #ffffff;
+.toolbar button:hover:not(:disabled) {
+  background: oklch(27% 0.012 265 / 0.06);
+  color: var(--ink);
 }
 
-button:disabled {
-  border-color: #9ca3af;
-  background: #f3f4f6;
-  color: #4b5563;
+.toolbar button:active:not(:disabled) {
+  transform: translateY(0.5px);
 }
 
-button:focus-visible,
-select:focus-visible,
-.ProseMirror:focus-visible {
-  outline: 3px solid #b45309;
-  outline-offset: 2px;
+.toolbar button[data-active="true"] {
+  background: var(--accent);
+  color: oklch(100% 0 0);
 }
 
-.surface {
-  min-height: 12rem;
-  padding: 0.75rem;
-  border: 1px solid #4b5563;
+.toolbar button[data-active="true"]:hover {
+  background: oklch(47% 0.16 262);
+  color: oklch(100% 0 0);
 }
 
+/*
+ * 禁用态刻意不给底色。旧样式给禁用按钮填了浅灰底，填色在工具栏里读起来是「这项开着」，
+ * 正好和真正的激活态相反。现在底色只有一个含义：当前生效。
+ */
+.toolbar button:disabled {
+  background: transparent;
+  color: var(--ink-faint);
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ── 环境控制行：动作按钮和格式按钮用两套不同词汇 ───────── */
+
+.env {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s3);
+  margin-block-start: var(--s3);
+  padding-block-start: var(--s3);
+  border-block-start: 1px solid var(--hairline);
+}
+
+.field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.field select {
+  min-height: 28px;
+  padding: 0 var(--s2);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-xs);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.field input[type="checkbox"] {
+  accent-color: var(--accent);
+  inline-size: 14px;
+  block-size: 14px;
+  margin: 0;
+  cursor: pointer;
+}
+
+.action {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  min-block-size: 28px;
+  padding: 0 var(--s3);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-xs);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition:
+    background 120ms var(--ease),
+    border-color 120ms var(--ease);
+}
+
+.action:hover {
+  background: oklch(27% 0.012 265 / 0.05);
+}
+
+.action:active {
+  transform: translateY(0.5px);
+}
+
+.action-primary {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: oklch(100% 0 0);
+}
+
+.action-primary:hover {
+  background: oklch(21% 0.012 265);
+}
+
+.action-danger {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.action-danger:hover {
+  background: var(--danger-wash);
+}
+
+.action:disabled {
+  border-color: var(--hairline);
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: not-allowed;
+}
+
+/* ── 纸 ───────────────────────────────────────────────── */
+
+.stage {
+  display: flex;
+  justify-content: center;
+  padding: var(--s6) var(--s5);
+  border-end-start-radius: calc(var(--radius) - 1px);
+  border-end-end-radius: calc(var(--radius) - 1px);
+  background: var(--canvas);
+}
+
+.paper {
+  inline-size: 100%;
+  max-inline-size: 68ch;
+  min-block-size: 380px;
+  padding: var(--s7) 44px;
+  border-radius: 3px;
+  background: var(--paper);
+  box-shadow: var(--lift);
+  transition: box-shadow 220ms var(--ease);
+}
+
+/* 签名微交互：光标落进纸里，纸被轻轻拿起来。 */
+.paper:focus-within {
+  box-shadow: var(--lift-focus);
+}
+
+.ProseMirror {
+  position: relative;
+  outline: none;
+  font-family: var(--font-paper);
+  font-size: 17px;
+  line-height: 1.75;
+  color: var(--ink);
+  word-break: break-word;
+}
+
+/*
+ * 空文档占位。ProseMirror 给空文本块补的是 <br class="ProseMirror-trailingBreak">，
+ * 只有「整篇就一个空段落」时才认，所以不需要额外插件。
+ */
+.ProseMirror > p:only-child:has(> br.ProseMirror-trailingBreak)::before {
+  content: "从这里开始写。输入 # 或 - 加空格试试结构规则，把图片拖进来看上传占位。";
+  position: absolute;
+  inset-inline: 0;
+  color: var(--ink-faint);
+  pointer-events: none;
+}
+
+.ProseMirror[data-mode="readonly"] > p:only-child::before,
+.ProseMirror[data-mode="disabled"] > p:only-child::before {
+  content: none;
+}
+
+.ProseMirror > :first-child {
+  margin-block-start: 0;
+}
+
+.ProseMirror > :last-child {
+  margin-block-end: 0;
+}
+
+/* 行高 1.75 已经很松，段间距要明显大过行距才读得出段落边界。 */
+.ProseMirror p {
+  margin: 0 0 1.05em;
+}
+
+.ProseMirror h1,
+.ProseMirror h2,
+.ProseMirror h3,
+.ProseMirror h4 {
+  margin: 1.4em 0 0.5em;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: 0.01em;
+}
+
+.ProseMirror h1 {
+  font-size: 1.7em;
+}
+
+.ProseMirror h2 {
+  font-size: 1.4em;
+}
+
+.ProseMirror h3 {
+  font-size: 1.18em;
+}
+
+.ProseMirror h4 {
+  font-size: 1em;
+}
+
+.ProseMirror blockquote {
+  margin: 0 0 1.05em;
+  padding-inline-start: var(--s4);
+  border-inline-start: 2px solid var(--accent);
+  color: var(--ink-soft);
+}
+
+.ProseMirror hr {
+  margin: 1.6em 0;
+  border: none;
+  border-block-start: 1px solid var(--hairline-strong);
+}
+
+.ProseMirror a {
+  color: var(--accent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+.ProseMirror pre {
+  margin: 0 0 1.05em;
+  padding: var(--s3) var(--s4);
+  border-radius: var(--radius-sm);
+  background: oklch(96% 0.004 265);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.ProseMirror code {
+  padding: 1px 5px;
+  border-radius: var(--radius-xs);
+  background: oklch(27% 0.012 265 / 0.07);
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+}
+
+.ProseMirror pre code {
+  padding: 0;
+  background: none;
+  font-size: inherit;
+}
+
+.ProseMirror ul,
+.ProseMirror ol {
+  margin: 0 0 1.05em;
+  padding-inline-start: 1.5em;
+}
+
+.ProseMirror li > p {
+  margin: 0 0 0.25em;
+}
+
+/* 勾选框用 CSS 画：`toDOM` 只能返回纯数据，可点的复选框要等 NodeView。 */
+.ProseMirror ul[data-type="task-list"] {
+  list-style: none;
+  padding-inline-start: 1.5em;
+}
+
+.ProseMirror ul[data-type="task-list"] > li {
+  position: relative;
+}
+
+/* 勾选框沿用 lucide 的 square / square-check-big，和工具栏图标同一套线条。 */
+.ProseMirror ul[data-type="task-list"] > li::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: -1.45em;
+  inset-block-start: 0.42em;
+  inline-size: 15px;
+  block-size: 15px;
+  background-color: var(--ink-faint);
+  -webkit-mask: var(--icon-square) center / contain no-repeat;
+  mask: var(--icon-square) center / contain no-repeat;
+}
+
+.ProseMirror ul[data-type="task-list"] > li[data-checked="true"]::before {
+  background-color: var(--accent);
+  -webkit-mask-image: var(--icon-square-check);
+  mask-image: var(--icon-square-check);
+}
+
+.ProseMirror ul[data-type="task-list"] > li[data-checked="true"] {
+  color: var(--ink-faint);
+  text-decoration: line-through;
+}
+
+/* prosemirror-tables 只给行为不给样式，表格的视觉在这里补。 */
+.ProseMirror .tableWrapper {
+  margin: 0 0 1.05em;
+  overflow-x: auto;
+}
+
+.ProseMirror table {
+  inline-size: 100%;
+  border-collapse: collapse;
+  font-size: 0.9em;
+  table-layout: fixed;
+}
+
+.ProseMirror th,
+.ProseMirror td {
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--hairline-strong);
+  vertical-align: top;
+  text-align: start;
+}
+
+.ProseMirror th {
+  background: oklch(96% 0.004 265);
+  font-weight: 600;
+}
+
+.ProseMirror th > p,
+.ProseMirror td > p {
+  margin: 0;
+}
+
+.ProseMirror .selectedCell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--accent-wash);
+  pointer-events: none;
+}
+
+.ProseMirror .selectedCell {
+  position: relative;
+}
+
+.ProseMirror .column-resize-handle {
+  position: absolute;
+  inset-block: 0 -2px;
+  inset-inline-end: -2px;
+  inline-size: 4px;
+  background: var(--accent);
+  pointer-events: none;
+}
+
+.ProseMirror.resize-cursor {
+  cursor: col-resize;
+}
+
+.ProseMirror[data-mode="readonly"] {
+  cursor: default;
+}
+
+.ProseMirror[data-mode="disabled"] {
+  color: var(--ink-faint);
+  cursor: not-allowed;
+  user-select: none;
+}
+
+/* 图片上传占位 */
 .ProseMirror .co-image-upload-indicator {
   display: inline-block;
   margin: 0.35rem 0;
-  padding: 0.25rem 0.5rem;
-  border-radius: 0.25rem;
-  background: #e8f0fe;
-  color: #174ea6;
-  font-size: 0.875rem;
+  padding: 2px var(--s2);
+  border-radius: var(--radius-xs);
+  background: var(--accent-wash);
+  color: var(--accent);
+  font-family: var(--font-ui);
+  font-size: 13px;
 }
 
 .ProseMirror .co-image-upload-indicator.co-image-failed {
-  background: #fce8e6;
-  color: #b3261e;
+  background: var(--danger-wash);
+  color: var(--danger);
+}
+
+.ProseMirror img {
+  max-inline-size: 100%;
+  height: auto;
+  border-radius: var(--radius-xs);
 }
 
 .ProseMirror img.co-image-uploading {
-  min-width: 6rem;
-  min-height: 3rem;
+  min-inline-size: 6rem;
+  min-block-size: 3rem;
   opacity: 0.45;
-  outline: 2px dashed #4285f4;
+  outline: 2px dashed var(--accent);
+}
+
+/* 装不上插件时的只读占位 */
+.co-unknown {
+  display: inline-block;
+  padding: 1px var(--s2);
+  border: 1px dashed var(--hairline-strong);
+  border-radius: var(--radius-xs);
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  user-select: all;
+}
+
+div.co-unknown {
+  display: block;
+  margin: 0 0 1.05em;
+}
+
+/* ── 控制台 ───────────────────────────────────────────── */
+
+.console {
+  margin-block-start: var(--s4);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  background: var(--console);
+}
+
+.console > summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s3);
+  min-block-size: 40px;
+  padding: 0 var(--s4);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-soft);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.console > summary::-webkit-details-marker {
+  display: none;
+}
+
+.console-title {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* 状态槽位：每种状态同字号同高度，只换颜色和圆点，切换时不跳动。 */
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  margin-inline-start: auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.status-dot {
+  inline-size: 6px;
+  block-size: 6px;
+  border-radius: 50%;
+  background: var(--ink-faint);
+}
+
+.status-dirty .status-dot {
+  background: var(--warn);
+}
+
+.status-composing {
+  color: var(--accent);
+}
+
+.console-body {
+  padding: 0 var(--s4) var(--s4);
+  border-block-start: 1px solid var(--hairline);
+  padding-block-start: var(--s3);
+}
+
+.console-body p {
+  margin: 0 0 var(--s3);
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.console-body .action {
+  margin-block-end: var(--s3);
+}
+
+.console pre {
+  max-block-size: 320px;
+  margin: 0 0 var(--s3);
+  padding: var(--s3);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow: auto;
+}
+
+.console pre:last-child {
+  margin-block-end: 0;
+}
+
+/* ── 可达性基线 ───────────────────────────────────────── */
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.paper:focus-within .ProseMirror:focus-visible {
+  outline: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .disclosure,
+  .toolbar button,
+  .tip,
+  .action,
+  .paper {
+    transition: none;
+  }
+
+  .toolbar button:active:not(:disabled),
+  .action:active {
+    transform: none;
+  }
+}
+
+/* ── 窄视口 ───────────────────────────────────────────── */
+
+@media (max-width: 640px) {
+  body {
+    padding: var(--s4) var(--s3) var(--s6);
+  }
+
+  .page-title {
+    font-size: 21px;
+  }
+
+  .chrome {
+    padding: var(--s3);
+  }
+
+  .stage {
+    padding: var(--s4) var(--s3);
+  }
+
+  .paper {
+    max-inline-size: none;
+    min-block-size: 280px;
+    padding: var(--s5) var(--s4);
+  }
+
+  .ProseMirror {
+    font-size: 16px;
+  }
+
+  .status {
+    margin-inline-start: 0;
+    inline-size: 100%;
+  }
 }
