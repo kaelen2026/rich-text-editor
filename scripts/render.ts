@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { createEditor } from "@kaelen/editor-api";
+import { createColorPlugin } from "@kaelen/editor-plugin-color";
 import { createImagePlugin } from "@kaelen/editor-plugin-image";
 import { createLinkPlugin } from "@kaelen/editor-plugin-link";
 import { createTablePlugin } from "@kaelen/editor-plugin-table";
@@ -17,6 +18,7 @@ const editor = createEditor({
   plugins: [
     createLinkPlugin(),
     createTablePlugin(),
+    createColorPlugin(),
     createImagePlugin({
       uploader: {
         upload: async () => {

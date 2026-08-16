@@ -1,5 +1,6 @@
 import { pathToFileURL } from "node:url";
 import { createEditor } from "@kaelen/editor-api";
+import { createColorPlugin } from "@kaelen/editor-plugin-color";
 import { createImagePlugin } from "@kaelen/editor-plugin-image";
 import { createLinkPlugin } from "@kaelen/editor-plugin-link";
 import { createTablePlugin } from "@kaelen/editor-plugin-table";
@@ -41,6 +42,7 @@ export interface BudgetFailure {
 const benchmarkPlugins = [
   createLinkPlugin(),
   createTablePlugin(),
+  createColorPlugin(),
   createImagePlugin({
     uploader: {
       upload: async () => ({ url: "https://assets.example.invalid/benchmark.png" }),

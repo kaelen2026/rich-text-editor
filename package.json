@@ -32,6 +32,7 @@
     "@commitlint/cli": "^20.2.0",
     "@commitlint/config-conventional": "^20.2.0",
     "@kaelen/editor-api": "workspace:*",
+    "@kaelen/editor-plugin-color": "workspace:*",
     "@kaelen/editor-plugin-image": "workspace:*",
     "@kaelen/editor-plugin-link": "workspace:*",
     "@kaelen/editor-plugin-table": "workspace:*",
