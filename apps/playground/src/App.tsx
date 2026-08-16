@@ -59,28 +59,44 @@ import {
 } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { ColorPicker, type ColorPickerMenu } from "./color-picker";
+import { ImageToolbar } from "./image-toolbar";
 
 const STORAGE_KEY = "playground.document";
 
 /** 仅用于 playground 的可取消上传模拟器；生产宿主传入自己的对象存储适配器。 */
 const playgroundUploader = {
-  upload(file: File, { signal }: { uploadId: string; signal: AbortSignal }) {
-    return new Promise<{ url: string; alt: string }>((resolve, reject) => {
-      const timer = window.setTimeout(
-        () => resolve({ url: URL.createObjectURL(file), alt: file.name }),
-        900,
-      );
-      signal.addEventListener(
-        "abort",
-        () => {
-          window.clearTimeout(timer);
-          reject(new DOMException("上传已取消", "AbortError"));
-        },
-        { once: true },
-      );
-    });
+  async upload(file: File, { signal }: { uploadId: string; signal: AbortSignal }) {
+    await simulateLatency(900, signal);
+    // 原始像素尺寸由上传服务给出：裁剪与旋转靠它推导展示盒，缺了就用不了。
+    return { url: URL.createObjectURL(file), alt: file.name, ...(await measure(file)) };
   },
 };
+
+function simulateLatency(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timer = window.setTimeout(resolve, ms);
+    signal.addEventListener(
+      "abort",
+      () => {
+        window.clearTimeout(timer);
+        reject(new DOMException("上传已取消", "AbortError"));
+      },
+      { once: true },
+    );
+  });
+}
+
+async function measure(file: File): Promise<{ width?: number; height?: number }> {
+  try {
+    const bitmap = await createImageBitmap(file);
+    const size = { width: bitmap.width, height: bitmap.height };
+    bitmap.close();
+    return size;
+  } catch {
+    // 解不出尺寸也照样上传：图片能显示，只是裁剪与旋转会被禁用。
+    return {};
+  }
+}
 
 type InstalledPlugins = NonNullable<EditorOptions["plugins"]>;
 
@@ -725,7 +741,7 @@ export function App() {
           </summary>
           <p className="notes-body">
             {
-              "标题、引用、列表、待办、代码块、分隔线都在工具栏上，按钮的 tooltip 是对应快捷键；列表里 Tab / Shift+Tab 升降级，Shift+Enter 软换行。选中文字后在“文字颜色”“背景色”里挑一格上色，面板底部的“清除”只去掉这一种颜色，前景色和背景色互不影响。点“图片”选择本地文件，或把图片拖入/粘贴到编辑区：上传中会显示占位，完成后回填；上传期间继续编辑，目标位置会随事务迁移。复制上传中图片不会复制运行时 uploadId。输入 #、-、1.、> 或 ``` 加空格可触发结构规则；中文/日文等输入法组合期间工具栏会暂停，并在候选词确认后恢复。复制会把可还原的 Slice 写入 HTML 的 data-co-slice，粘贴时优先恢复它；Cmd/Ctrl+Shift+V 与代码块内粘贴始终只取纯文本。切换状态可以看只读态与禁用态的区别；点保存写入 localStorage，刷新页面内容仍在。勾选“注入故障插件”会装入一批坏掉的第三方插件：重名、缺依赖、循环依赖、覆盖核心命令、命令抛错，用来看熔断，每种坏法都只让它自己失效。"
+              "标题、引用、列表、待办、代码块、分隔线都在工具栏上，按钮的 tooltip 是对应快捷键；列表里 Tab / Shift+Tab 升降级，Shift+Enter 软换行。选中文字后在“文字颜色”“背景色”里挑一格上色，面板底部的“清除”只去掉这一种颜色，前景色和背景色互不影响。点“图片”选择本地文件，或把图片拖入/粘贴到编辑区：上传中会显示占位，完成后回填；上传期间继续编辑，目标位置会随事务迁移。复制上传中图片不会复制运行时 uploadId。图片插入后可以反复回去改：单击选中，图片上方浮出快捷条（旋转、环绕、替换、删除），双击进入编辑模态——在整幅原图上拖出裁剪框、挑滤镜、调尺寸与替代文本，预览用的就是文档渲染那一套推导，点“应用”才写入，撤销一步即可回到改之前。裁剪与旋转要靠上传服务返回的原始尺寸，拿不到尺寸时这两项会被禁用。输入 #、-、1.、> 或 ``` 加空格可触发结构规则；中文/日文等输入法组合期间工具栏会暂停，并在候选词确认后恢复。复制会把可还原的 Slice 写入 HTML 的 data-co-slice，粘贴时优先恢复它；Cmd/Ctrl+Shift+V 与代码块内粘贴始终只取纯文本。切换状态可以看只读态与禁用态的区别；点保存写入 localStorage，刷新页面内容仍在。勾选“注入故障插件”会装入一批坏掉的第三方插件：重名、缺依赖、循环依赖、覆盖核心命令、命令抛错，用来看熔断，每种坏法都只让它自己失效。"
             }
           </p>
         </details>
@@ -747,6 +763,7 @@ export function App() {
             <div className="paper">
               <EditorContent />
             </div>
+            <ImageToolbar />
           </div>
         </div>
         <PatchPanel baseDocument={baseDocument} />
