@@ -310,6 +310,16 @@ details[open] > summary .disclosure {
   cursor: not-allowed;
 }
 
+.sr-only {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 /*
  * 格式按钮：正方形图标槽，无底无边，只有 hover 和 active 有材质。
  * 必须排除 .menu-item：菜单面板长在 .toolbar 里面，不排除的话菜单条目会被
@@ -365,6 +375,203 @@ details[open] > summary .disclosure {
   color: var(--ink-faint);
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+/* ── 取色面板 ─────────────────────────────────────────── */
+
+/*
+ * 面板自上而下三段：色域方块、色相/不透明度滑杆、数值。
+ * 棋盘格是透明色的底衬，没有它半透明的预览圆点会分不出深浅。
+ */
+:root {
+  --checker: repeating-conic-gradient(oklch(84% 0.008 265) 0% 25%, oklch(100% 0 0) 0% 50%);
+}
+
+.picker {
+  inline-size: 232px;
+}
+
+.picker-field {
+  position: relative;
+  block-size: 132px;
+  margin-block-end: var(--s2);
+  border-radius: var(--radius-xs);
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.picker-cursor {
+  position: absolute;
+  inline-size: 12px;
+  block-size: 12px;
+  border: 2px solid oklch(100% 0 0);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px oklch(27% 0.012 265 / 0.45);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+/* 色域方块靠指针拖；这两个滑杆是它的键盘与读屏入口，因此只藏视觉不藏焦点。 */
+.picker-axis {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.picker-axis:focus-visible {
+  position: static;
+  inline-size: 100%;
+  block-size: auto;
+  margin: 0;
+  clip-path: none;
+}
+
+.picker-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.toolbar button.picker-pipette {
+  min-inline-size: 26px;
+  min-block-size: 26px;
+  color: var(--ink-soft);
+}
+
+/*
+ * 预览圆点也是复制按钮。图标平时不显示：圆点要先把颜色本身说清楚，
+ * 指上去才换成"可以复制"的表达。
+ */
+.toolbar button.picker-preview {
+  position: relative;
+  inline-size: 26px;
+  block-size: 26px;
+  min-inline-size: 26px;
+  min-block-size: 26px;
+  padding: 0;
+  border: 1px solid var(--hairline);
+  border-radius: 50%;
+  /* 半透明颜色压在棋盘格上，深浅才看得出来。 */
+  background-size:
+    auto,
+    8px 8px;
+  color: oklch(100% 0 0);
+}
+
+.toolbar button.picker-preview svg {
+  opacity: 0;
+  filter: drop-shadow(0 0 2px oklch(27% 0.012 265 / 0.7));
+  transition: opacity 110ms var(--ease);
+}
+
+.toolbar button.picker-preview:hover svg,
+.toolbar button.picker-preview:focus-visible svg {
+  opacity: 1;
+}
+
+.picker-sliders {
+  flex: 1;
+  display: grid;
+  gap: 6px;
+}
+
+.picker-sliders input[type="range"] {
+  inline-size: 100%;
+  block-size: 12px;
+  margin: 0;
+  border-radius: 6px;
+  appearance: none;
+  cursor: pointer;
+}
+
+.picker-hue {
+  background: linear-gradient(
+    to right,
+    #f00 0%,
+    #ff0 17%,
+    #0f0 33%,
+    #0ff 50%,
+    #00f 67%,
+    #f0f 83%,
+    #f00 100%
+  );
+}
+
+/*
+ * 起点写成同色零透明而不是 transparent 关键字：两者在插值上等价的前提是
+ * 预乘，靠不住的浏览器会把它当成透明黑，滑杆左半段就发灰。
+ */
+.picker-alpha {
+  background:
+    linear-gradient(to right, var(--picker-clear, transparent), var(--picker-opaque, var(--ink))),
+    var(--checker);
+  background-size:
+    auto,
+    8px 8px;
+}
+
+.picker-sliders input[type="range"]::-webkit-slider-thumb {
+  inline-size: 14px;
+  block-size: 14px;
+  border: 2px solid oklch(100% 0 0);
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: 0 0 0 1px oklch(27% 0.012 265 / 0.45);
+  appearance: none;
+}
+
+.picker-sliders input[type="range"]::-moz-range-thumb {
+  inline-size: 14px;
+  block-size: 14px;
+  border: 2px solid oklch(100% 0 0);
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: 0 0 0 1px oklch(27% 0.012 265 / 0.45);
+}
+
+.picker-fields {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  margin-block: var(--s2);
+}
+
+.picker-field-label {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+
+.picker-input {
+  inline-size: 78px;
+  padding: 4px var(--s1);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-xs);
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-align: center;
+}
+
+.picker-field-label:last-of-type .picker-input {
+  inline-size: 52px;
+}
+
+.picker-readout {
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-faint);
+  text-align: end;
 }
 
 /*

@@ -2,6 +2,7 @@
   "envelope": 1,
   "schemaVersion": 1,
   "plugins": {
+    "color": 1,
     "image": 1,
     "link": 1,
     "table": 1
@@ -23,6 +24,15 @@
             "type": "text",
             "marks": [{ "type": "co_link", "attrs": { "href": "https://example.com/docs" } }],
             "text": "链接"
+          },
+          { "type": "text", "text": "，还有" },
+          {
+            "type": "text",
+            "marks": [
+              { "type": "co_text_color", "attrs": { "color": "#d92d20" } },
+              { "type": "co_background_color", "attrs": { "color": "#fef08a" } }
+            ],
+            "text": "彩色文字"
           }
         ]
       },
