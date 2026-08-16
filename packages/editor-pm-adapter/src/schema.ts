@@ -88,24 +88,32 @@ function toTagParseRule(rule: CoreTagParseRule): TagParseRule {
   if (!rule.attrsFromDOM) {
     return rule as TagParseRule;
   }
-  const { attrsFromDOM, ...rest } = rule;
+  const { attrsFromDOM, attrs, ...rest } = rule;
   return {
     ...rest,
     getAttrs: (element: HTMLElement) => {
-      return Object.fromEntries(
-        Object.entries(attrsFromDOM).map(([attribute, source]) => {
-          if (typeof source === "string") {
-            return [attribute, element.getAttribute(source)];
-          }
-          return [attribute, readDOMAttribute(element, source)];
-        }),
-      );
+      // 常量属性先铺底：`getAttrs` 一旦存在，ProseMirror 就不再看 `rule.attrs`，
+      // 少了这一步，`h2` 规则加上读取钩子后连自己的 `level` 都会丢。
+      return {
+        ...attrs,
+        ...Object.fromEntries(
+          Object.entries(attrsFromDOM).map(([attribute, source]) => {
+            if (typeof source === "string") {
+              return [attribute, element.getAttribute(source)];
+            }
+            return [attribute, readDOMAttribute(element, source)];
+          }),
+        ),
+      };
     },
   };
 }
 
 function readDOMAttribute(element: HTMLElement, rule: CoreDOMAttributeRule): unknown {
   const raw = element.getAttribute(rule.attribute);
+  if (rule.oneOf) {
+    return raw !== null && rule.oneOf.includes(raw) ? raw : rule.default;
+  }
   if (rule.type !== "integer") {
     return raw ?? rule.default;
   }

@@ -36,7 +36,9 @@ describe("内部 Slice 剪贴板协议", () => {
     const restored = parseSlice(schema, encoded);
 
     expect(encoded).toEqual({
-      content: [{ type: "paragraph", content: [{ type: "text", text: "中间" }] }],
+      content: [
+        { type: "paragraph", attrs: { align: null }, content: [{ type: "text", text: "中间" }] },
+      ],
       openStart,
       openEnd,
     });
@@ -48,7 +50,9 @@ describe("内部 Slice 剪贴板协议", () => {
   it("拒绝不可能的开合深度，避免损坏文档", () => {
     expect(
       parseSlice(schema, {
-        content: [{ type: "paragraph", content: [{ type: "text", text: "x" }] }],
+        content: [
+          { type: "paragraph", attrs: { align: null }, content: [{ type: "text", text: "x" }] },
+        ],
         openStart: 2,
         openEnd: 1,
       }),
@@ -209,9 +213,14 @@ describe("内部 Slice 剪贴板协议", () => {
       expect(view.state.doc.toJSON()).toEqual({
         type: "doc",
         content: [
-          { type: "heading", attrs: { level: 4 }, content: [{ type: "text", text: "标题" }] },
+          {
+            type: "heading",
+            attrs: { level: 4, align: null },
+            content: [{ type: "text", text: "标题" }],
+          },
           {
             type: "paragraph",
+            attrs: { align: null },
             content: [{ type: "text", marks: [{ type: "strong" }], text: "正文" }],
           },
         ],
@@ -282,12 +291,24 @@ describe("内部 Slice 剪贴板协议", () => {
                   {
                     type: "co_table_cell",
                     attrs: { colspan: 1, rowspan: 1, colwidth: null },
-                    content: [{ type: "paragraph", content: [{ type: "text", text: "姓名" }] }],
+                    content: [
+                      {
+                        type: "paragraph",
+                        attrs: { align: null },
+                        content: [{ type: "text", text: "姓名" }],
+                      },
+                    ],
                   },
                   {
                     type: "co_table_cell",
                     attrs: { colspan: 1, rowspan: 1, colwidth: null },
-                    content: [{ type: "paragraph", content: [{ type: "text", text: "备注" }] }],
+                    content: [
+                      {
+                        type: "paragraph",
+                        attrs: { align: null },
+                        content: [{ type: "text", text: "备注" }],
+                      },
+                    ],
                   },
                 ],
               },
@@ -297,7 +318,13 @@ describe("内部 Slice 剪贴板协议", () => {
                   {
                     type: "co_table_cell",
                     attrs: { colspan: 1, rowspan: 1, colwidth: null },
-                    content: [{ type: "paragraph", content: [{ type: "text", text: "张三" }] }],
+                    content: [
+                      {
+                        type: "paragraph",
+                        attrs: { align: null },
+                        content: [{ type: "text", text: "张三" }],
+                      },
+                    ],
                   },
                   {
                     type: "co_table_cell",
@@ -305,6 +332,7 @@ describe("内部 Slice 剪贴板协议", () => {
                     content: [
                       {
                         type: "paragraph",
+                        attrs: { align: null },
                         content: [{ type: "text", text: "含\t制表符和\n换行" }],
                       },
                     ],
@@ -364,6 +392,7 @@ describe("内部 Slice 剪贴板协议", () => {
         content: [
           {
             type: "paragraph",
+            attrs: { align: null },
             content: [
               {
                 type: "text",

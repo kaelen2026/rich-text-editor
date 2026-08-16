@@ -17,6 +17,9 @@
       },
       {
         "type": "paragraph",
+        "attrs": {
+          "align": "center"
+        },
         "content": [
           { "type": "text", "marks": [{ "type": "strong" }], "text": "粗体" },
           { "type": "text", "text": "和" },

@@ -2,10 +2,12 @@
   "content": [
     {
       "type": "paragraph",
+      "attrs": { "align": null },
       "content": [{ "type": "text", "text": "第一段" }]
     },
     {
       "type": "paragraph",
+      "attrs": { "align": null },
       "content": [{ "type": "text", "text": "第二段" }]
     }
   ],

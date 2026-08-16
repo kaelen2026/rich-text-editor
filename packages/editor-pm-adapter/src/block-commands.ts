@@ -1,4 +1,4 @@
-import { isHeadingLevel } from "@kaelen/editor-schema";
+import { type BlockAlign, isHeadingLevel } from "@kaelen/editor-schema";
 import { lift, setBlockType, wrapIn } from "prosemirror-commands";
 import type { NodeType, Node as ProseMirrorNode, ResolvedPos, Schema } from "prosemirror-model";
 import { liftListItem, sinkListItem, splitListItem, wrapInList } from "prosemirror-schema-list";
@@ -209,6 +209,53 @@ export function toggleList(schema: Schema, listName: string): Command {
     );
     return true;
   };
+}
+
+/**
+ * 选区里能对齐的文本块。判据是 Schema 声明了 `align` 属性，而不是一张节点名清单：
+ * 代码块刻意没有这个属性（对齐会打乱缩进），插件将来加自己的文本块也不必改这里。
+ */
+function alignableBlocks(state: EditorState): Array<{ node: ProseMirrorNode; pos: number }> {
+  const blocks: Array<{ node: ProseMirrorNode; pos: number }> = [];
+  eachSelectedBlock(state, ($block, node) => {
+    if (node.type.spec.attrs?.align && !blocks.some((seen) => seen.pos === $block.pos)) {
+      blocks.push({ node, pos: $block.pos });
+    }
+  });
+  return blocks;
+}
+
+/**
+ * 设置选区内文本块的对齐。整段已经是该对齐时再执行一次就清除，
+ * 与标题按钮同样的开关语义——工具栏上"生效态"的按钮必须能点回去。
+ */
+export function setBlockAlign(align: BlockAlign | null): Command {
+  return (state, dispatch) => {
+    const blocks = alignableBlocks(state);
+    if (blocks.length === 0) {
+      return false;
+    }
+    const target =
+      align !== null && blocks.every((block) => block.node.attrs.align === align) ? null : align;
+    if (blocks.every((block) => block.node.attrs.align === target)) {
+      return false;
+    }
+    if (dispatch) {
+      const transaction = state.tr;
+      for (const block of blocks) {
+        // 位置在整批改属性期间不会移动：setNodeMarkup 不改变任何节点的尺寸。
+        transaction.setNodeMarkup(block.pos, undefined, { ...block.node.attrs, align: target });
+      }
+      dispatch(transaction);
+    }
+    return true;
+  };
+}
+
+/** 选区内可对齐的文本块是否**都**是该对齐。空选区（例如只选中图片）不算生效。 */
+export function isBlockAligned(state: EditorState, align: BlockAlign | null): boolean {
+  const blocks = alignableBlocks(state);
+  return blocks.length > 0 && blocks.every((block) => (block.node.attrs.align ?? null) === align);
 }
 
 /** 选区覆盖的待办项。跨项选择时一起勾选，与工具栏"作用于选区"的语义一致。 */

@@ -36,7 +36,11 @@ const schema = buildSchema({
 const initialDoc = {
   type: "doc",
   content: [
-    { type: "paragraph", content: [{ type: "text", text: "Introduction" }] },
+    {
+      type: "paragraph",
+      attrs: { align: null },
+      content: [{ type: "text", text: "Introduction" }],
+    },
     {
       type: "co_table",
       content: [
@@ -45,11 +49,23 @@ const initialDoc = {
           content: [
             {
               type: "co_table_cell",
-              content: [{ type: "paragraph", content: [{ type: "text", text: "A1" }] }],
+              content: [
+                {
+                  type: "paragraph",
+                  attrs: { align: null },
+                  content: [{ type: "text", text: "A1" }],
+                },
+              ],
             },
             {
               type: "co_table_cell",
-              content: [{ type: "paragraph", content: [{ type: "text", text: "B1" }] }],
+              content: [
+                {
+                  type: "paragraph",
+                  attrs: { align: null },
+                  content: [{ type: "text", text: "B1" }],
+                },
+              ],
             },
           ],
         },
@@ -57,6 +73,7 @@ const initialDoc = {
     },
     {
       type: "paragraph",
+      attrs: { align: null },
       content: [
         { type: "text", text: "before " },
         { type: "co_widget", attrs: { label: "initial" } },
@@ -99,11 +116,23 @@ describe("y-prosemirror compatibility PoC", () => {
             content: [
               {
                 type: "co_table_cell",
-                content: [{ type: "paragraph", content: [{ type: "text", text: "A1 shared" }] }],
+                content: [
+                  {
+                    type: "paragraph",
+                    attrs: { align: null },
+                    content: [{ type: "text", text: "A1 shared" }],
+                  },
+                ],
               },
               {
                 type: "co_table_cell",
-                content: [{ type: "paragraph", content: [{ type: "text", text: "B1" }] }],
+                content: [
+                  {
+                    type: "paragraph",
+                    attrs: { align: null },
+                    content: [{ type: "text", text: "B1" }],
+                  },
+                ],
               },
             ],
           },

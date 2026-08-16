@@ -1,11 +1,12 @@
 [
   {
     "type": "heading",
-    "attrs": { "level": 4 },
+    "attrs": { "level": 4, "align": null },
     "content": [{ "type": "text", "text": "外部标题" }]
   },
   {
     "type": "paragraph",
+    "attrs": { "align": null },
     "content": [
       { "type": "text", "marks": [{ "type": "strong" }], "text": "保留" },
       { "type": "text", "text": " " },
@@ -17,5 +18,9 @@
       { "type": "text", "text": " 危险" }
     ]
   },
-  { "type": "paragraph", "content": [{ "type": "text", "text": "表格降级" }] }
+  {
+    "type": "paragraph",
+    "attrs": { "align": null },
+    "content": [{ "type": "text", "text": "表格降级" }]
+  }
 ]

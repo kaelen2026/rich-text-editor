@@ -7,6 +7,9 @@
     "content": [
       {
         "type": "paragraph",
+        "attrs": {
+          "align": null
+        },
         "content": [
           {
             "type": "text",

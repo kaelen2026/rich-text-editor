@@ -331,6 +331,121 @@ describe("待办项", () => {
   });
 });
 
+describe("对齐", () => {
+  function aligns(session: EditorSession): unknown[] {
+    return (session.docJSON.content ?? []).map((node) => node.attrs?.align ?? null);
+  }
+
+  it("四种对齐都能设置，再点一次同一种回到默认", () => {
+    for (const align of ["left", "center", "right", "justify"] as const) {
+      const session = createSession(paragraph("文本"));
+      focus(session, 0);
+
+      expect(run(session, "block.setAlign", { align })).toBe(true);
+      expect(aligns(session)).toEqual([align]);
+      expect(active(session, "block.setAlign", { align })).toBe(true);
+      expect(active(session, "block.setAlign", { align: "center" })).toBe(align === "center");
+
+      expect(run(session, "block.setAlign", { align })).toBe(true);
+      expect(aligns(session)).toEqual([null]);
+    }
+  });
+
+  it("直接传字符串与传 { align } 等价，null 是恢复默认", () => {
+    const session = createSession(paragraph("文本"));
+    focus(session, 0);
+
+    expect(run(session, "block.setAlign", "right")).toBe(true);
+    expect(aligns(session)).toEqual(["right"]);
+
+    expect(run(session, "block.setAlign", null)).toBe(true);
+    expect(aligns(session)).toEqual([null]);
+    // 已经是默认了，没有什么可清除的。
+    expect(run(session, "block.setAlign", null)).toBe(false);
+  });
+
+  it("标题一并支持，跨块选区整体对齐", () => {
+    const session = createSession(paragraph("甲"), paragraph("乙"));
+    focus(session, 1);
+    run(session, "block.setHeading", { level: 2 });
+
+    focus(session, 0, 1);
+    expect(run(session, "block.setAlign", { align: "center" })).toBe(true);
+    expect(aligns(session)).toEqual(["center", "center"]);
+    expect(active(session, "block.setAlign", { align: "center" })).toBe(true);
+  });
+
+  it("选区只有部分对齐时补齐而不是清除，与生效态语义一致", () => {
+    const session = createSession(paragraph("甲"), paragraph("乙"));
+    focus(session, 0);
+    run(session, "block.setAlign", { align: "center" });
+
+    focus(session, 0, 1);
+    expect(active(session, "block.setAlign", { align: "center" })).toBe(false);
+    expect(run(session, "block.setAlign", { align: "center" })).toBe(true);
+    expect(aligns(session)).toEqual(["center", "center"]);
+  });
+
+  it("列表项与引用里的段落照常对齐", () => {
+    const session = createSession(paragraph("条目"));
+    focus(session, 0);
+    run(session, "list.toggleBullet");
+
+    expect(run(session, "block.setAlign", { align: "right" })).toBe(true);
+    expect(session.docJSON.content?.[0]?.content?.[0]?.content?.[0]?.attrs).toMatchObject({
+      align: "right",
+    });
+  });
+
+  it("代码块没有对齐属性，命令在其中不可用", () => {
+    const session = createSession(paragraph("代码"));
+    focus(session, 0);
+    run(session, "block.toggleCodeBlock");
+
+    expect(run(session, "block.setAlign", { align: "center" })).toBe(false);
+    expect(active(session, "block.setAlign", { align: "center" })).toBe(false);
+    expect(coreCommands["block.setAlign"]?.enabled?.(session, { align: "center" })).toBe(false);
+  });
+
+  it("选区跨越代码块时只对齐能对齐的块", () => {
+    const session = createSession(paragraph("代码"), paragraph("文本"));
+    focus(session, 0);
+    run(session, "block.toggleCodeBlock");
+
+    focus(session, 0, 1);
+    expect(run(session, "block.setAlign", { align: "center" })).toBe(true);
+    expect(aligns(session)).toEqual([null, "center"]);
+    // 代码块不参与判断，否则整段永远不可能"全部生效"。
+    expect(active(session, "block.setAlign", { align: "center" })).toBe(true);
+  });
+
+  it("非法对齐被拒绝且不改文档", () => {
+    const session = createSession(paragraph("文本"));
+    focus(session, 0);
+
+    for (const input of ["middle", { align: "middle" }, { align: 1 }, undefined]) {
+      expect(coreCommands["block.setAlign"]?.run(session, true, input)).toMatchObject({
+        ok: false,
+        reason: "invalid",
+      });
+    }
+    expect(aligns(session)).toEqual([null]);
+  });
+
+  it("撤销一次回到对齐前", () => {
+    const session = createSession(paragraph("甲"), paragraph("乙"));
+    focus(session, 0, 1);
+
+    run(session, "block.setAlign", { align: "justify" });
+    expect(aligns(session)).toEqual(["justify", "justify"]);
+
+    undo(session);
+    expect(aligns(session)).toEqual([null, null]);
+    redo(session);
+    expect(aligns(session)).toEqual(["justify", "justify"]);
+  });
+});
+
 describe("行内标记", () => {
   it("下划线、删除线、行内代码各自开关", () => {
     for (const [command, mark] of [

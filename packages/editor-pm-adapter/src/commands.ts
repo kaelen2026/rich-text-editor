@@ -1,4 +1,4 @@
-import { isHeadingLevel } from "@kaelen/editor-schema";
+import { type BlockAlign, isBlockAlign, isHeadingLevel } from "@kaelen/editor-schema";
 import type { CommandResult } from "@kaelen/editor-shared-types";
 import { selectAll, toggleMark } from "prosemirror-commands";
 import { redo, undo } from "prosemirror-history";
@@ -7,6 +7,7 @@ import {
   insertHardBreak,
   insertHorizontalRule,
   outdentListItem,
+  setBlockAlign,
   setParagraph,
   toggleBlockquote,
   toggleChecked,
@@ -52,6 +53,27 @@ export const coreCommands: Record<string, SessionCommand> = {
     active: (session, input) => {
       const level = headingLevelFrom(input);
       return level !== undefined && session.isBlockActive("heading", { level });
+    },
+  },
+  "block.setAlign": {
+    run: (session, apply, input) => {
+      const align = alignFrom(input);
+      if (align === undefined) {
+        return {
+          ok: false,
+          reason: "invalid",
+          detail: "对齐仅支持 left/center/right/justify，或 null 恢复默认",
+        };
+      }
+      return commandResult(session.applyCommand(setBlockAlign(align), apply));
+    },
+    enabled: (session, input) => {
+      const align = alignFrom(input);
+      return align !== undefined && session.applyCommand(setBlockAlign(align), false);
+    },
+    active: (session, input) => {
+      const align = alignFrom(input);
+      return align !== undefined && session.isAligned(align);
     },
   },
   "block.toggleBlockquote": {
@@ -126,6 +148,21 @@ function markCommand(markName: string): SessionCommand {
       ),
     active: (session) => session.isMarkActive(markName),
   };
+}
+
+/**
+ * 对齐既可以直接传字符串，也可以传 `{ align }`；`null` 是"恢复默认"，
+ * 与非法输入（返回 `undefined`）必须分开——前者是一次合法的清除操作。
+ */
+function alignFrom(input: unknown): BlockAlign | null | undefined {
+  if (input === null || isBlockAlign(input)) {
+    return input;
+  }
+  if (typeof input === "object" && "align" in input) {
+    const align = (input as { align: unknown }).align;
+    return align === null || isBlockAlign(align) ? align : undefined;
+  }
+  return undefined;
 }
 
 /** 标题层级既可以直接传数字，也可以传 `{ level }`。 */

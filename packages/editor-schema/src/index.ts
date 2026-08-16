@@ -1,8 +1,11 @@
 export { cloneJson } from "./clone";
 export {
+  BLOCK_ALIGNMENTS,
+  type BlockAlign,
   coreMarks,
   coreNodes,
   type HeadingLevel,
+  isBlockAlign,
   isHeadingLevel,
   MAX_HEADING_LEVEL,
   UNKNOWN_BLOCK,

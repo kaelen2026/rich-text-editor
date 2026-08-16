@@ -8,6 +8,7 @@ const doc: NodeJSON = {
   content: [
     {
       type: "paragraph",
+      attrs: { align: null },
       content: [{ type: "text", marks: [{ type: "strong" }], text: "加粗文本" }],
     },
   ],

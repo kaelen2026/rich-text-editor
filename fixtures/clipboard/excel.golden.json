@@ -8,12 +8,24 @@
           {
             "type": "co_table_cell",
             "attrs": { "colspan": 1, "rowspan": 1, "colwidth": null },
-            "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "姓名" }] }]
+            "content": [
+              {
+                "type": "paragraph",
+                "attrs": { "align": null },
+                "content": [{ "type": "text", "text": "姓名" }]
+              }
+            ]
           },
           {
             "type": "co_table_cell",
             "attrs": { "colspan": 1, "rowspan": 1, "colwidth": null },
-            "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "备注" }] }]
+            "content": [
+              {
+                "type": "paragraph",
+                "attrs": { "align": null },
+                "content": [{ "type": "text", "text": "备注" }]
+              }
+            ]
           }
         ]
       },
@@ -23,13 +35,23 @@
           {
             "type": "co_table_cell",
             "attrs": { "colspan": 1, "rowspan": 1, "colwidth": null },
-            "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "张三" }] }]
+            "content": [
+              {
+                "type": "paragraph",
+                "attrs": { "align": null },
+                "content": [{ "type": "text", "text": "张三" }]
+              }
+            ]
           },
           {
             "type": "co_table_cell",
             "attrs": { "colspan": 1, "rowspan": 1, "colwidth": null },
             "content": [
-              { "type": "paragraph", "content": [{ "type": "text", "text": "含制表符" }] }
+              {
+                "type": "paragraph",
+                "attrs": { "align": null },
+                "content": [{ "type": "text", "text": "含制表符" }]
+              }
             ]
           }
         ]

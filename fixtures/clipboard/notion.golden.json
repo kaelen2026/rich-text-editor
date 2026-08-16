@@ -4,7 +4,13 @@
     "content": [
       {
         "type": "list_item",
-        "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "Notion 项目" }] }]
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": { "align": null },
+            "content": [{ "type": "text", "text": "Notion 项目" }]
+          }
+        ]
       }
     ]
   }

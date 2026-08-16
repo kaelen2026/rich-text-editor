@@ -11,6 +11,7 @@ import {
   insertHardBreak,
   insertHorizontalRule,
   outdentListItem,
+  setBlockAlign,
   setParagraph,
   splitListItemCommand,
   toggleBlockquote,
@@ -33,6 +34,12 @@ function shortcutBindings(schema: Schema): Record<string, Command> {
     "Mod-Shift-8": toggleList(schema, "bullet_list"),
     "Mod-Shift-9": toggleList(schema, "ordered_list"),
     "Mod-Shift-7": toggleList(schema, "task_list"),
+
+    // 与 Word / Google Docs 同一组键位，肌肉记忆直接迁移过来。
+    "Mod-Shift-l": setBlockAlign("left"),
+    "Mod-Shift-e": setBlockAlign("center"),
+    "Mod-Shift-r": setBlockAlign("right"),
+    "Mod-Shift-j": setBlockAlign("justify"),
 
     // 列表内才生效；不在列表里返回 false，Tab 因此仍然把焦点移出编辑区。
     Tab: indentListItem(schema),

@@ -8,7 +8,8 @@
       {
         "type": "heading",
         "attrs": {
-          "level": 1
+          "level": 1,
+          "align": null
         },
         "content": [
           {
@@ -20,7 +21,8 @@
       {
         "type": "heading",
         "attrs": {
-          "level": 4
+          "level": 4,
+          "align": null
         },
         "content": [
           {
@@ -31,6 +33,9 @@
       },
       {
         "type": "paragraph",
+        "attrs": {
+          "align": null
+        },
         "content": [
           {
             "type": "text",
@@ -91,6 +96,9 @@
         "content": [
           {
             "type": "paragraph",
+            "attrs": {
+              "align": null
+            },
             "content": [
               {
                 "type": "text",
@@ -111,6 +119,9 @@
             "content": [
               {
                 "type": "paragraph",
+                "attrs": {
+                  "align": null
+                },
                 "content": [
                   {
                     "type": "text",
@@ -126,6 +137,9 @@
                     "content": [
                       {
                         "type": "paragraph",
+                        "attrs": {
+                          "align": null
+                        },
                         "content": [
                           {
                             "type": "text",
@@ -152,6 +166,9 @@
             "content": [
               {
                 "type": "paragraph",
+                "attrs": {
+                  "align": null
+                },
                 "content": [
                   {
                     "type": "text",
@@ -174,6 +191,9 @@
             "content": [
               {
                 "type": "paragraph",
+                "attrs": {
+                  "align": null
+                },
                 "content": [
                   {
                     "type": "text",
@@ -191,6 +211,9 @@
             "content": [
               {
                 "type": "paragraph",
+                "attrs": {
+                  "align": null
+                },
                 "content": [
                   {
                     "type": "text",

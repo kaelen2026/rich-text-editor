@@ -258,6 +258,12 @@ export interface CoreDOMAttributeRule {
   type?: "integer";
   min?: number;
   max?: number;
+  /**
+   * 取值白名单。DOM 上的字符串会被原样写进文档属性，再由 `toDOM` 拼进 HTML；
+   * 少了白名单，一份手写的 `data-align="x;background:url(…)"` 就能顺着解析
+   * 管线走进内联样式。不在名单内的值回落到 `default`。
+   */
+  oneOf?: readonly string[];
   default?: unknown;
 }
 
