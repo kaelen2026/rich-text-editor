@@ -1,4 +1,5 @@
 import { createEditor, type EditorOptions, type RichEditor } from "@kaelen/editor-api";
+import { createColorPlugin } from "@kaelen/editor-plugin-color";
 import { createImagePlugin } from "@kaelen/editor-plugin-image";
 import { createLinkPlugin } from "@kaelen/editor-plugin-link";
 import { createTablePlugin } from "@kaelen/editor-plugin-table";
@@ -15,6 +16,7 @@ import { createEmptyEnvelope, stringifyEnvelope } from "@kaelen/editor-schema";
 import type { DocumentPatch, EditorEnvelope, EditorMode } from "@kaelen/editor-shared-types";
 import type { ToolbarDefinition } from "@kaelen/editor-ui-model";
 import {
+  Baseline,
   Bold,
   ChevronDown,
   ChevronRight,
@@ -38,6 +40,7 @@ import {
   type LucideIcon,
   Merge,
   Minus,
+  PaintBucket,
   Pilcrow,
   Redo2,
   Rows3,
@@ -55,6 +58,7 @@ import {
   Zap,
 } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
+import { ColorPicker, type ColorPickerMenu } from "./color-picker";
 
 const STORAGE_KEY = "playground.document";
 
@@ -165,6 +169,28 @@ const TOOLBAR_MENUS: Record<string, readonly MenuEntry[]> = {
 };
 
 /**
+ * 两个取色面板。前景色与背景色是两条独立命令，因此面板也各开各的，
+ * 「清除」只清自己那一种颜色。
+ */
+const COLOR_MENUS: Record<string, ColorPickerMenu> = {
+  "text-color": {
+    label: "文字颜色",
+    setCommand: "color.setText",
+    unsetCommand: "color.unsetText",
+    readCommand: "color.readText",
+    fallback: "#d92d20",
+  },
+  "background-color": {
+    label: "背景色",
+    setCommand: "color.setBackground",
+    unsetCommand: "color.unsetBackground",
+    readCommand: "color.readBackground",
+    // 背景色默认给半透明：整块实底会把文字压得读不出来。
+    fallback: "#fef08acc",
+  },
+};
+
+/**
  * 常用的留在工具栏上，成套的收进分类菜单。菜单触发器一律 alwaysEnabled：
  * 触发器自己不代表某条命令，能不能用要看菜单里那一条。
  */
@@ -216,6 +242,20 @@ const toolbarDefinition: ToolbarDefinition = {
         { id: "underline", label: "下划线", command: "format.underline", shortcut: "Mod-U" },
         { id: "strike", label: "删除线", command: "format.strikethrough", shortcut: "Mod-Shift-X" },
         { id: "inline-code", label: "行内代码", command: "format.code", shortcut: "Mod-E" },
+        {
+          id: "text-color",
+          label: "文字颜色",
+          command: "color.setText",
+          menu: true,
+          alwaysEnabled: true,
+        },
+        {
+          id: "background-color",
+          label: "背景色",
+          command: "color.setBackground",
+          menu: true,
+          alwaysEnabled: true,
+        },
         { id: "link", label: "链接", command: "link.set" },
         { id: "unlink", label: "取消链接", command: "link.unset" },
       ],
@@ -270,6 +310,8 @@ const TOOLBAR_ICONS: Record<string, LucideIcon> = {
   underline: Underline,
   strike: Strikethrough,
   "inline-code": Code,
+  "text-color": Baseline,
+  "background-color": PaintBucket,
   link: Link,
   unlink: Unlink,
   image: Image,
@@ -368,12 +410,14 @@ function bootEditor(faulty: boolean, document: EditorEnvelope): Boot {
       ? [
           createLinkPlugin(),
           createTablePlugin(),
+          createColorPlugin(),
           createImagePlugin({ uploader: playgroundUploader }),
           ...FAULTY_PLUGINS,
         ]
       : [
           createLinkPlugin(),
           createTablePlugin(),
+          createColorPlugin(),
           createImagePlugin({ uploader: playgroundUploader }),
         ],
   });
@@ -487,33 +531,37 @@ function Chrome({
             </>
           );
         }}
-        renderMenu={(item, close) => (
-          <MenuPanel onClose={close}>
-            {(TOOLBAR_MENUS[item.id] ?? []).map((entry) => {
-              const query = editor.queryCommand(entry.command, entry.input);
-              const Icon = TOOLBAR_ICONS[entry.id];
-              return (
-                <button
-                  className="menu-item"
-                  data-active={query.active}
-                  disabled={!query.enabled}
-                  key={entry.id}
-                  onClick={() => {
-                    editor.execute(entry.command, entry.input);
-                    close();
-                  }}
-                  onMouseDown={(event) => event.preventDefault()}
-                  role="menuitem"
-                  type="button"
-                >
-                  {Icon ? <Icon aria-hidden="true" size={15} strokeWidth={1.75} /> : null}
-                  <span className="menu-item-label">{entry.label}</span>
-                  {entry.shortcut ? <kbd>{formatShortcut(entry.shortcut)}</kbd> : null}
-                </button>
-              );
-            })}
-          </MenuPanel>
-        )}
+        renderMenu={(item, close) => {
+          const colorMenu = COLOR_MENUS[item.id];
+          return (
+            <MenuPanel onClose={close}>
+              {colorMenu ? <ColorPicker menu={colorMenu} onClose={close} /> : null}
+              {(TOOLBAR_MENUS[item.id] ?? []).map((entry) => {
+                const query = editor.queryCommand(entry.command, entry.input);
+                const Icon = TOOLBAR_ICONS[entry.id];
+                return (
+                  <button
+                    className="menu-item"
+                    data-active={query.active}
+                    disabled={!query.enabled}
+                    key={entry.id}
+                    onClick={() => {
+                      editor.execute(entry.command, entry.input);
+                      close();
+                    }}
+                    onMouseDown={(event) => event.preventDefault()}
+                    role="menuitem"
+                    type="button"
+                  >
+                    {Icon ? <Icon aria-hidden="true" size={15} strokeWidth={1.75} /> : null}
+                    <span className="menu-item-label">{entry.label}</span>
+                    {entry.shortcut ? <kbd>{formatShortcut(entry.shortcut)}</kbd> : null}
+                  </button>
+                );
+              })}
+            </MenuPanel>
+          );
+        }}
         onExecute={(item) => {
           if (item.id === "link") {
             const href = window.prompt("链接地址（仅 https/http/mailto/tel）", "https://");
@@ -677,7 +725,7 @@ export function App() {
           </summary>
           <p className="notes-body">
             {
-              "标题、引用、列表、待办、代码块、分隔线都在工具栏上，按钮的 tooltip 是对应快捷键；列表里 Tab / Shift+Tab 升降级，Shift+Enter 软换行。点“图片”选择本地文件，或把图片拖入/粘贴到编辑区：上传中会显示占位，完成后回填；上传期间继续编辑，目标位置会随事务迁移。复制上传中图片不会复制运行时 uploadId。输入 #、-、1.、> 或 ``` 加空格可触发结构规则；中文/日文等输入法组合期间工具栏会暂停，并在候选词确认后恢复。复制会把可还原的 Slice 写入 HTML 的 data-co-slice，粘贴时优先恢复它；Cmd/Ctrl+Shift+V 与代码块内粘贴始终只取纯文本。切换状态可以看只读态与禁用态的区别；点保存写入 localStorage，刷新页面内容仍在。勾选“注入故障插件”会装入一批坏掉的第三方插件：重名、缺依赖、循环依赖、覆盖核心命令、命令抛错，用来看熔断，每种坏法都只让它自己失效。"
+              "标题、引用、列表、待办、代码块、分隔线都在工具栏上，按钮的 tooltip 是对应快捷键；列表里 Tab / Shift+Tab 升降级，Shift+Enter 软换行。选中文字后在“文字颜色”“背景色”里挑一格上色，面板底部的“清除”只去掉这一种颜色，前景色和背景色互不影响。点“图片”选择本地文件，或把图片拖入/粘贴到编辑区：上传中会显示占位，完成后回填；上传期间继续编辑，目标位置会随事务迁移。复制上传中图片不会复制运行时 uploadId。输入 #、-、1.、> 或 ``` 加空格可触发结构规则；中文/日文等输入法组合期间工具栏会暂停，并在候选词确认后恢复。复制会把可还原的 Slice 写入 HTML 的 data-co-slice，粘贴时优先恢复它；Cmd/Ctrl+Shift+V 与代码块内粘贴始终只取纯文本。切换状态可以看只读态与禁用态的区别；点保存写入 localStorage，刷新页面内容仍在。勾选“注入故障插件”会装入一批坏掉的第三方插件：重名、缺依赖、循环依赖、覆盖核心命令、命令抛错，用来看熔断，每种坏法都只让它自己失效。"
             }
           </p>
         </details>
