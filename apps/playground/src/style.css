@@ -1290,47 +1290,51 @@ details[open] > summary .disclosure {
 .image-crop-surface {
   position: absolute;
   inset: 0;
+  /* 压暗选框之外靠一圈超大投影，必须在这里裁住，否则它会糊满整个模态。 */
+  overflow: hidden;
   touch-action: none;
   cursor: crosshair;
 }
 
 .image-crop-frame {
   position: absolute;
-  outline: 1px solid oklch(100% 0 0);
-  box-shadow: 0 0 0 9999px oklch(20% 0.01 265 / 0.55);
+  box-shadow:
+    inset 0 0 0 1px oklch(100% 0 0),
+    0 0 0 9999px oklch(20% 0.01 265 / 0.5);
   cursor: move;
 }
 
+/* 手柄画在框内侧：框贴到画面边缘时，它们不会被上面那道裁剪切掉。 */
 .image-crop-handle {
   position: absolute;
-  inline-size: 12px;
-  block-size: 12px;
+  inline-size: 10px;
+  block-size: 10px;
   border: 2px solid oklch(100% 0 0);
   border-radius: 2px;
   background: var(--accent);
 }
 
 .image-crop-nw {
-  inset-block-start: -6px;
-  inset-inline-start: -6px;
+  inset-block-start: 0;
+  inset-inline-start: 0;
   cursor: nwse-resize;
 }
 
 .image-crop-ne {
-  inset-block-start: -6px;
-  inset-inline-end: -6px;
+  inset-block-start: 0;
+  inset-inline-end: 0;
   cursor: nesw-resize;
 }
 
 .image-crop-sw {
-  inset-block-end: -6px;
-  inset-inline-start: -6px;
+  inset-block-end: 0;
+  inset-inline-start: 0;
   cursor: nesw-resize;
 }
 
 .image-crop-se {
-  inset-block-end: -6px;
-  inset-inline-end: -6px;
+  inset-block-end: 0;
+  inset-inline-end: 0;
   cursor: nwse-resize;
 }
 
