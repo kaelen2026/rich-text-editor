@@ -333,6 +333,69 @@ describe("图片二次编辑", () => {
     expect(imageAttrs(editor).crop).toBeNull();
   });
 
+  it("图片转过之后，选框按用户看到的画面换算回原图坐标", () => {
+    const editor = editorWithImage();
+    editor.execute("image.rotate", { pos: 0, turn: 1 });
+
+    editor.execute("image.crop", { pos: 0, crop: { x: 0, y: 0, width: 0.5, height: 1 } });
+
+    expect(imageAttrs(editor).crop).toEqual({ x: 0, y: 0.5, width: 1, height: 0.5 });
+  });
+
+  it("模态框的一次应用只落一个事务，撤销一步回到原样", () => {
+    const editor = editorWithImage();
+    const before = editor.getRevision();
+
+    expect(
+      editor.execute("image.update", {
+        pos: 0,
+        alt: "月季",
+        displayWidth: 320,
+        align: "center",
+        rotate: 90,
+        filter: "warm",
+        crop: { x: 0.1, y: 0.1, width: 0.5, height: 0.5 },
+      }),
+    ).toEqual({ ok: true });
+    expect(imageAttrs(editor)).toMatchObject({
+      alt: "月季",
+      displayWidth: 320,
+      align: "center",
+      rotate: 90,
+      filter: "warm",
+      crop: { x: 0.1, y: 0.1, width: 0.5, height: 0.5 },
+    });
+    expect(editor.getRevision()).toBe(before + 1);
+
+    expect(editor.undo().ok).toBe(true);
+    expect(imageAttrs(editor)).toMatchObject({
+      alt: "花",
+      displayWidth: null,
+      align: "none",
+      rotate: 0,
+      filter: "none",
+      crop: null,
+    });
+  });
+
+  it("一组属性里有一个不合法就整组不写，不留半套状态", () => {
+    const editor = editorWithImage();
+
+    expect(
+      editor.execute("image.update", { pos: 0, align: "center", filter: "url(evil.css)" }),
+    ).toMatchObject({ ok: false, reason: "invalid" });
+    expect(imageAttrs(editor)).toMatchObject({ align: "none", filter: "none" });
+  });
+
+  it("模态框给的是原图坐标的裁剪，不再叠加到已有裁剪上", () => {
+    const editor = editorWithImage();
+    editor.execute("image.crop", { pos: 0, crop: { x: 0.5, y: 0, width: 0.5, height: 1 } });
+
+    editor.execute("image.update", { pos: 0, crop: { x: 0, y: 0, width: 0.25, height: 0.25 } });
+
+    expect(imageAttrs(editor).crop).toEqual({ x: 0, y: 0, width: 0.25, height: 0.25 });
+  });
+
   it("原始尺寸未知时裁剪与旋转不可用，其余编辑照常", () => {
     const editor = editorWithImage({ width: null, height: null });
 

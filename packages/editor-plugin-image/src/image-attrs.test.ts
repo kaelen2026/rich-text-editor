@@ -5,6 +5,7 @@ import {
   imageLayout,
   normalizeImageAttrs,
   readCrop,
+  unrotateCrop,
 } from "./image-attrs";
 
 describe("图片属性归一化", () => {
@@ -87,6 +88,44 @@ describe("裁剪矩形合成", () => {
       y: 0.1,
       width: 0.8,
       height: 0.8,
+    });
+  });
+});
+
+describe("旋转视图下的选框换算", () => {
+  it("没有旋转时原样透传", () => {
+    expect(unrotateCrop({ x: 0.1, y: 0.2, width: 0.3, height: 0.4 }, 0)).toEqual({
+      x: 0.1,
+      y: 0.2,
+      width: 0.3,
+      height: 0.4,
+    });
+  });
+
+  it("顺时针 90 度后，画面左半对应原图下半", () => {
+    expect(unrotateCrop({ x: 0, y: 0, width: 0.5, height: 1 }, 90)).toEqual({
+      x: 0,
+      y: 0.5,
+      width: 1,
+      height: 0.5,
+    });
+  });
+
+  it("180 度后选框整体对角翻转", () => {
+    expect(unrotateCrop({ x: 0, y: 0, width: 0.25, height: 0.5 }, 180)).toEqual({
+      x: 0.75,
+      y: 0.5,
+      width: 0.25,
+      height: 0.5,
+    });
+  });
+
+  it("270 度是 90 度的逆向", () => {
+    expect(unrotateCrop({ x: 0, y: 0, width: 0.5, height: 1 }, 270)).toEqual({
+      x: 0,
+      y: 0,
+      width: 1,
+      height: 0.5,
     });
   });
 });

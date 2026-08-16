@@ -124,6 +124,26 @@ export function composeCrop(current: ImageCrop | null, relative: ImageCrop): Ima
   });
 }
 
+/**
+ * 把用户在**旋转后的画面**上框出的矩形转回图片自身的坐标。
+ *
+ * 裁剪 UI 只认屏幕上看到的那一块，而裁剪属性说的是原图的哪一块；图片转过之后
+ * 两者的坐标轴不再重合，少了这一步，转过 90 度的图会被裁到完全不相干的位置。
+ */
+export function unrotateCrop(rect: ImageCrop, rotate: ImageRotation): ImageCrop {
+  const { x, y, width, height } = rect;
+  if (rotate === 90) {
+    return { x: y, y: 1 - x - width, width: height, height: width };
+  }
+  if (rotate === 180) {
+    return { x: 1 - x - width, y: 1 - y - height, width, height };
+  }
+  if (rotate === 270) {
+    return { x: 1 - y - height, y: x, width: height, height: width };
+  }
+  return rect;
+}
+
 /** 裁剪后的原始尺寸，也就是"恢复原始尺寸"要回到的那个宽高。 */
 export function croppedNaturalSize(attrs: ImageAttrs): { width: number; height: number } | null {
   if (attrs.width === null || attrs.height === null) {

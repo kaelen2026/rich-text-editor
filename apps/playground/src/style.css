@@ -942,14 +942,396 @@ details[open] > summary .disclosure {
 .ProseMirror img {
   max-inline-size: 100%;
   height: auto;
+}
+
+/*
+ * 图片的尺寸、裁剪、旋转、滤镜与环绕全由 toDOM 的内联样式给定，样式表只管
+ * 观感：圆角、选中态与上传态。改这里不会影响导出的 HTML 长什么样。
+ */
+.ProseMirror .co-image {
+  margin-block: var(--s3);
+}
+
+.ProseMirror .co-image-frame {
   border-radius: var(--radius-xs);
 }
 
-.ProseMirror img.co-image-uploading {
+.ProseMirror .co-image.ProseMirror-selectednode .co-image-frame {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.ProseMirror .co-image.co-image-uploading .co-image-frame {
   min-inline-size: 6rem;
   min-block-size: 3rem;
   opacity: 0.45;
   outline: 2px dashed var(--accent);
+}
+
+.ProseMirror .co-image.co-image-failed .co-image-frame {
+  outline: 2px dashed var(--danger);
+}
+
+/* ── 选中图片后的浮层快捷条 ───────────────────────────── */
+
+.image-bar {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: var(--s1);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+  box-shadow:
+    0 2px 4px oklch(27% 0.012 265 / 0.06),
+    0 14px 32px -12px oklch(27% 0.012 265 / 0.28);
+}
+
+.image-bar-item {
+  position: relative;
+  display: inline-flex;
+}
+
+.image-bar-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s1);
+  inline-size: 30px;
+  block-size: 30px;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition:
+    background 100ms var(--ease),
+    color 100ms var(--ease);
+}
+
+/* 主入口带文字：双击进模态之外，得有个看得见的说法。 */
+.image-bar-wide {
+  inline-size: auto;
+  padding-inline: var(--s2);
+  color: var(--ink);
+}
+
+.image-bar-button:hover:not(:disabled) {
+  background: oklch(27% 0.012 265 / 0.06);
+  color: var(--ink);
+}
+
+.image-bar-button:disabled {
+  color: var(--ink-faint);
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.image-bar-danger:hover:not(:disabled) {
+  background: var(--danger-wash);
+  color: var(--danger);
+}
+
+.image-bar-button:hover .tip,
+.image-bar-button:focus-visible .tip {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-50%, 0);
+}
+
+.image-bar-button[aria-expanded="true"] .tip {
+  display: none;
+}
+
+.image-bar-divider {
+  inline-size: 1px;
+  block-size: 18px;
+  margin-inline: var(--s1);
+  background: var(--hairline);
+}
+
+.image-bar-menu {
+  position: absolute;
+  inset-block-start: calc(100% + 5px);
+  inset-inline-start: 50%;
+  z-index: 61;
+  min-inline-size: 176px;
+  padding: var(--s1);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+  box-shadow:
+    0 2px 4px oklch(27% 0.012 265 / 0.06),
+    0 14px 32px -12px oklch(27% 0.012 265 / 0.28);
+  transform: translateX(-50%);
+}
+
+/* ── 图片编辑模态 ─────────────────────────────────────── */
+
+.image-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--s5);
+  background: oklch(20% 0.01 265 / 0.42);
+}
+
+.image-modal {
+  display: flex;
+  flex-direction: column;
+  max-block-size: 100%;
+  border-radius: var(--radius);
+  background: var(--paper);
+  box-shadow: 0 24px 64px -16px oklch(27% 0.012 265 / 0.45);
+  overflow: hidden;
+}
+
+.image-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--s3) var(--s4);
+  border-block-end: 1px solid var(--hairline);
+}
+
+.image-modal-header h2 {
+  margin: 0;
+  font-family: var(--font-paper);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.image-modal-close {
+  display: inline-flex;
+  padding: var(--s1);
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.image-modal-close:hover {
+  background: oklch(27% 0.012 265 / 0.06);
+  color: var(--ink);
+}
+
+.image-modal-body {
+  display: flex;
+  gap: var(--s4);
+  padding: var(--s4);
+  overflow: auto;
+}
+
+/* 台面是深色的：图片边缘和裁剪蒙版都要在它上面读得出来。 */
+.image-modal-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  inline-size: 552px;
+  padding: var(--s4);
+  border-radius: var(--radius-sm);
+  background: var(--console);
+}
+
+.image-modal-preview {
+  position: relative;
+}
+
+.image-modal-caption {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 12px;
+}
+
+.image-modal-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.image-modal-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  inline-size: 260px;
+}
+
+.image-modal-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+}
+
+.image-modal-label {
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+.image-modal-hint {
+  color: var(--warn);
+  font-size: 12px;
+}
+
+.image-modal-input {
+  padding: 6px var(--s2);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-xs);
+  font: inherit;
+  font-size: 13px;
+}
+
+.image-modal-segments {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--radius-xs);
+  background: oklch(27% 0.012 265 / 0.05);
+}
+
+.image-modal-segment {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s1);
+  min-block-size: 26px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 100ms var(--ease);
+}
+
+.image-modal-segment:hover:not(:disabled) {
+  background: oklch(100% 0 0 / 0.7);
+}
+
+.image-modal-segment[data-active="true"] {
+  background: var(--paper);
+  color: var(--accent);
+  box-shadow: 0 1px 2px oklch(27% 0.012 265 / 0.12);
+}
+
+.image-modal-segment:disabled {
+  color: var(--ink-faint);
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.image-modal-filters {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--s2);
+}
+
+/* 滤镜用真图打样，比读名字快，也免得预设名和观感对不上。 */
+.image-modal-filter {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.image-modal-filter img {
+  inline-size: 100%;
+  block-size: 34px;
+  border-radius: 3px;
+  object-fit: cover;
+}
+
+.image-modal-filter[data-active="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.image-modal-footer {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s3) var(--s4);
+  border-block-start: 1px solid var(--hairline);
+}
+
+.image-modal-spacer {
+  flex: 1;
+}
+
+/* ── 裁剪选框 ─────────────────────────────────────────── */
+
+.image-crop-surface {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.image-crop-frame {
+  position: absolute;
+  outline: 1px solid oklch(100% 0 0);
+  box-shadow: 0 0 0 9999px oklch(20% 0.01 265 / 0.55);
+  cursor: move;
+}
+
+.image-crop-handle {
+  position: absolute;
+  inline-size: 12px;
+  block-size: 12px;
+  border: 2px solid oklch(100% 0 0);
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.image-crop-nw {
+  inset-block-start: -6px;
+  inset-inline-start: -6px;
+  cursor: nwse-resize;
+}
+
+.image-crop-ne {
+  inset-block-start: -6px;
+  inset-inline-end: -6px;
+  cursor: nesw-resize;
+}
+
+.image-crop-sw {
+  inset-block-end: -6px;
+  inset-inline-start: -6px;
+  cursor: nesw-resize;
+}
+
+.image-crop-se {
+  inset-block-end: -6px;
+  inset-inline-end: -6px;
+  cursor: nwse-resize;
 }
 
 /* 装不上插件时的只读占位 */

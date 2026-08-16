@@ -22,6 +22,7 @@ import {
   imageLayout,
   normalizeImageAttrs,
   readCrop,
+  unrotateCrop,
 } from "./image-attrs";
 
 const IMAGE_NODE = "co_image";
@@ -141,6 +142,7 @@ export function createImagePlugin(options: ImagePluginOptions): EditorPlugin {
       commands.add("image.cancel", controller.cancelCommand);
       commands.add("image.replace", controller.replaceCommand);
       commands.add("image.selected", selectedImageCommand);
+      commands.add("image.update", updateCommand);
       commands.add("image.setAlt", setAltCommand);
       commands.add("image.resize", resizeCommand);
       commands.add("image.setAlign", setAlignCommand);
@@ -243,7 +245,8 @@ function imageAttrCommand(
   parse: (input: Record<string, unknown>, attrs: ImageAttrs) => Partial<ImageAttrs> | string,
   options: {
     active?: (attrs: ImageAttrs, input: Record<string, unknown>) => boolean;
-    requiresNaturalSize?: boolean;
+    /** 裁剪与旋转要靠原始尺寸推导展示盒，缺了就只能禁用，不能渲染成别的样子。 */
+    requiresNaturalSize?: (input: Record<string, unknown>) => boolean;
   } = {},
 ): SessionCommand {
   return {
@@ -257,7 +260,7 @@ function imageAttrCommand(
       if (!attrs) {
         return { ok: false, reason: "disabled", detail: "没有选中图片" };
       }
-      if (options.requiresNaturalSize && croppedNaturalSize(attrs) === null) {
+      if (options.requiresNaturalSize?.(record) && croppedNaturalSize(attrs) === null) {
         return { ok: false, reason: "disabled", detail: "这张图片缺少原始尺寸，无法裁剪或旋转" };
       }
       const parsed = parse(record, attrs);
@@ -277,7 +280,10 @@ function imageAttrCommand(
         (target) => normalizeImageAttrs(target.node.attrs),
         record.pos,
       );
-      return attrs !== null && (!options.requiresNaturalSize || croppedNaturalSize(attrs) !== null);
+      return (
+        attrs !== null &&
+        (!options.requiresNaturalSize?.(record) || croppedNaturalSize(attrs) !== null)
+      );
     },
     active(session, input) {
       const record = inputRecord(input);
@@ -313,32 +319,71 @@ const selectedImageCommand: SessionCommand = {
   active: () => false,
 };
 
-const setAltCommand = imageAttrCommand((input) =>
-  typeof input.alt === "string" ? { alt: input.alt } : "替代文本必须是字符串",
-);
-
-const resizeCommand = imageAttrCommand(
-  (input) => {
-    if (input.width === null) {
-      return { displayWidth: null };
+/**
+ * 单个属性的校验。命令与"一次写一组"的 `image.update` 共用同一份判断，
+ * 免得模态框那条路径松一格、工具条那条路径严一格。
+ */
+const ATTR_PARSERS: Record<string, (value: unknown) => Partial<ImageAttrs> | string> = {
+  alt: (value) => (typeof value === "string" ? { alt: value } : "替代文本必须是字符串"),
+  displayWidth: parseDisplayWidth,
+  align: (value) => (isAlign(value) ? { align: value } : "对齐方式仅支持 none/left/center/right"),
+  rotate: (value) => (isRotation(value) ? { rotate: value } : "旋转仅支持 0/90/180/270"),
+  filter: (value) => (isFilter(value) ? { filter: value } : "滤镜必须是内置预设之一"),
+  // 这里的裁剪是**原图坐标**：模态框展示的是整幅原图，框出来的就是最终结果。
+  // 相对当前画面的交互式裁剪走 `image.crop`，那条路径才需要合成与反旋转。
+  crop: (value) => {
+    if (value === null) {
+      return { crop: null };
     }
-    if (typeof input.width !== "number" || !Number.isFinite(input.width) || input.width <= 0) {
-      return "展示宽度必须是正数，或用 null 恢复原始尺寸";
-    }
-    return {
-      displayWidth: Math.round(
-        Math.min(MAX_DISPLAY_WIDTH, Math.max(MIN_DISPLAY_WIDTH, input.width)),
-      ),
-    };
+    const crop = readCrop(value);
+    return crop ? { crop } : "裁剪矩形必须是原图上 0–1 的比例区域";
   },
-  { active: (attrs, input) => attrs.displayWidth === (input.width ?? null) },
+};
+
+function parseDisplayWidth(value: unknown): Partial<ImageAttrs> | string {
+  if (value === null) {
+    return { displayWidth: null };
+  }
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    return "展示宽度必须是正数，或用 null 恢复原始尺寸";
+  }
+  return {
+    displayWidth: Math.round(Math.min(MAX_DISPLAY_WIDTH, Math.max(MIN_DISPLAY_WIDTH, value))),
+  };
+}
+
+/**
+ * 一次写入一组属性：模态框里改完再"应用"，落成一个事务、撤销一步就回到原样。
+ *
+ * 只处理输入里出现过的键，没提到的属性原样保留。
+ */
+const updateCommand = imageAttrCommand(
+  (input) => {
+    const patch: Partial<ImageAttrs> = {};
+    for (const [key, parse] of Object.entries(ATTR_PARSERS)) {
+      if (!(key in input)) {
+        continue;
+      }
+      const parsed = parse(input[key]);
+      if (typeof parsed === "string") {
+        return parsed;
+      }
+      Object.assign(patch, parsed);
+    }
+    return Object.keys(patch).length > 0 ? patch : "没有需要更新的图片属性";
+  },
+  { requiresNaturalSize: (input) => "rotate" in input || "crop" in input },
 );
 
-const setAlignCommand = imageAttrCommand(
-  (input) =>
-    isAlign(input.align) ? { align: input.align } : "对齐方式仅支持 none/left/center/right",
-  { active: (attrs, input) => attrs.align === input.align },
-);
+const setAltCommand = imageAttrCommand((input) => parseAttr("alt", input.alt));
+
+const resizeCommand = imageAttrCommand((input) => parseDisplayWidth(input.width), {
+  active: (attrs, input) => attrs.displayWidth === (input.width ?? null),
+});
+
+const setAlignCommand = imageAttrCommand((input) => parseAttr("align", input.align), {
+  active: (attrs, input) => attrs.align === input.align,
+});
 
 const rotateCommand = imageAttrCommand(
   (input, attrs) => {
@@ -350,13 +395,16 @@ const rotateCommand = imageAttrCommand(
     }
     return "旋转仅支持 turn: ±1 或 rotate: 0/90/180/270";
   },
-  { requiresNaturalSize: true },
+  { requiresNaturalSize: () => true },
 );
 
-const setFilterCommand = imageAttrCommand(
-  (input) => (isFilter(input.filter) ? { filter: input.filter } : "滤镜必须是内置预设之一"),
-  { active: (attrs, input) => attrs.filter === input.filter },
-);
+const setFilterCommand = imageAttrCommand((input) => parseAttr("filter", input.filter), {
+  active: (attrs, input) => attrs.filter === input.filter,
+});
+
+function parseAttr(key: string, value: unknown): Partial<ImageAttrs> | string {
+  return ATTR_PARSERS[key]?.(value) ?? "未知的图片属性";
+}
 
 const cropCommand = imageAttrCommand(
   (input, attrs) => {
@@ -367,9 +415,10 @@ const cropCommand = imageAttrCommand(
     if (!relative) {
       return "裁剪矩形必须是当前画面上 0–1 的比例区域";
     }
-    return { crop: composeCrop(attrs.crop, relative) };
+    // 选框来自用户看到的画面，图片可能正转着，先转回图片自身的坐标再合成。
+    return { crop: composeCrop(attrs.crop, unrotateCrop(relative, attrs.rotate)) };
   },
-  { requiresNaturalSize: true, active: (attrs) => attrs.crop !== null },
+  { requiresNaturalSize: () => true, active: (attrs) => attrs.crop !== null },
 );
 
 const removeCommand: SessionCommand = {

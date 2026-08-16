@@ -12,6 +12,7 @@ export {
   imageLayout,
   normalizeImageAttrs,
   readCrop,
+  unrotateCrop,
 } from "./image-attrs";
 export {
   type AssetUploader,
