@@ -16,6 +16,7 @@ import type { DocumentPatch, EditorEnvelope, EditorMode } from "@kaelen/editor-s
 import type { ToolbarDefinition } from "@kaelen/editor-ui-model";
 import {
   Bold,
+  ChevronDown,
   ChevronRight,
   Code,
   CodeXml,
@@ -29,6 +30,7 @@ import {
   Italic,
   Link,
   List,
+  ListChecks,
   ListIndentDecrease,
   ListIndentIncrease,
   ListOrdered,
@@ -46,12 +48,13 @@ import {
   Table,
   TextQuote,
   Trash2,
+  Type,
   Underline,
   Undo2,
   Unlink,
   Zap,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 
 const STORAGE_KEY = "playground.document";
 
@@ -115,32 +118,68 @@ const FAULTY_PLUGINS: InstalledPlugins = [
   { name: "ring-b", version: "0.0.1", namespace: "co_", dependsOn: ["ring-a"] },
 ];
 
+/**
+ * 菜单里的条目。它们不进 ToolbarDefinition：模型只管可见按钮的漫游焦点，
+ * 菜单内容由宿主用 renderMenu 画，每条自己查命令状态。
+ */
+interface MenuEntry {
+  id: string;
+  label: string;
+  command: string;
+  input?: unknown;
+  shortcut?: string;
+}
+
+const TOOLBAR_MENUS: Record<string, readonly MenuEntry[]> = {
+  "block-style": [
+    { id: "paragraph", label: "正文", command: "block.setParagraph", shortcut: "Mod-Alt-0" },
+    ...[1, 2, 3, 4].map((level) => ({
+      id: `heading-${level}`,
+      label: `${level} 级标题`,
+      command: "block.setHeading",
+      input: { level },
+      shortcut: `Mod-Alt-${level}`,
+    })),
+    { id: "quote", label: "引用", command: "block.toggleBlockquote", shortcut: "Mod-Shift->" },
+    { id: "code-block", label: "代码块", command: "block.toggleCodeBlock", shortcut: "Mod-Alt-C" },
+    { id: "rule", label: "分隔线", command: "block.insertHorizontalRule", shortcut: "Mod-Alt-R" },
+  ],
+  "list-ops": [
+    { id: "checked", label: "勾选", command: "list.toggleChecked" },
+    { id: "indent", label: "缩进", command: "list.indent", shortcut: "Tab" },
+    { id: "outdent", label: "提升", command: "list.outdent", shortcut: "Shift-Tab" },
+  ],
+  "table-ops": [
+    {
+      id: "insert-table",
+      label: "插入 3×3 表格",
+      command: "table.insert",
+      input: { rows: 3, cols: 3, withHeaderRow: true },
+    },
+    { id: "add-row", label: "加行", command: "table.addRowAfter" },
+    { id: "add-column", label: "加列", command: "table.addColumnAfter" },
+    { id: "merge-cells", label: "合并单元格", command: "table.mergeCells" },
+    { id: "split-cell", label: "拆分单元格", command: "table.splitCell" },
+    { id: "delete-table", label: "删除表格", command: "table.delete" },
+  ],
+};
+
+/**
+ * 常用的留在工具栏上，成套的收进分类菜单。菜单触发器一律 alwaysEnabled：
+ * 触发器自己不代表某条命令，能不能用要看菜单里那一条。
+ */
 const toolbarDefinition: ToolbarDefinition = {
   label: "编辑工具栏",
   groups: [
     {
-      label: "块级格式",
+      label: "段落样式",
       items: [
-        { id: "paragraph", label: "正文", command: "block.setParagraph", shortcut: "Mod-Alt-0" },
-        ...[1, 2, 3, 4].map((level) => ({
-          id: `heading-${level}`,
-          label: `H${level}`,
-          command: "block.setHeading",
-          input: { level },
-          shortcut: `Mod-Alt-${level}`,
-        })),
-        { id: "quote", label: "引用", command: "block.toggleBlockquote", shortcut: "Mod-Shift->" },
         {
-          id: "code-block",
-          label: "代码块",
-          command: "block.toggleCodeBlock",
-          shortcut: "Mod-Alt-C",
-        },
-        {
-          id: "rule",
-          label: "分隔线",
-          command: "block.insertHorizontalRule",
-          shortcut: "Mod-Alt-R",
+          id: "block-style",
+          label: "段落样式",
+          command: "block.setParagraph",
+          menu: true,
+          alwaysEnabled: true,
         },
       ],
     },
@@ -160,13 +199,17 @@ const toolbarDefinition: ToolbarDefinition = {
           shortcut: "Mod-Shift-9",
         },
         { id: "task-list", label: "待办列表", command: "list.toggleTask", shortcut: "Mod-Shift-7" },
-        { id: "checked", label: "勾选", command: "list.toggleChecked" },
-        { id: "indent", label: "缩进", command: "list.indent", shortcut: "Tab" },
-        { id: "outdent", label: "提升", command: "list.outdent", shortcut: "Shift-Tab" },
+        {
+          id: "list-ops",
+          label: "列表操作",
+          command: "list.indent",
+          menu: true,
+          alwaysEnabled: true,
+        },
       ],
     },
     {
-      label: "行内格式与历史",
+      label: "行内格式",
       items: [
         { id: "bold", label: "加粗", command: "format.bold", shortcut: "Mod-B" },
         { id: "italic", label: "斜体", command: "format.italic", shortcut: "Mod-I" },
@@ -175,25 +218,26 @@ const toolbarDefinition: ToolbarDefinition = {
         { id: "inline-code", label: "行内代码", command: "format.code", shortcut: "Mod-E" },
         { id: "link", label: "链接", command: "link.set" },
         { id: "unlink", label: "取消链接", command: "link.unset" },
-        { id: "image", label: "图片", command: "image.insert", alwaysEnabled: true },
-        { id: "undo", label: "撤销", command: "history.undo", shortcut: "Mod-Z" },
-        { id: "redo", label: "重做", command: "history.redo", shortcut: "Mod-Shift-Z" },
       ],
     },
     {
-      label: "表格",
+      label: "插入",
       items: [
+        { id: "image", label: "图片", command: "image.insert", alwaysEnabled: true },
         {
-          id: "insert-table",
-          label: "插入 3×3 表格",
+          id: "table-ops",
+          label: "表格",
           command: "table.insert",
-          input: { rows: 3, cols: 3, withHeaderRow: true },
+          menu: true,
+          alwaysEnabled: true,
         },
-        { id: "add-row", label: "加行", command: "table.addRowAfter" },
-        { id: "add-column", label: "加列", command: "table.addColumnAfter" },
-        { id: "merge-cells", label: "合并单元格", command: "table.mergeCells" },
-        { id: "split-cell", label: "拆分单元格", command: "table.splitCell" },
-        { id: "delete-table", label: "删除表格", command: "table.delete" },
+      ],
+    },
+    {
+      label: "历史",
+      items: [
+        { id: "undo", label: "撤销", command: "history.undo", shortcut: "Mod-Z" },
+        { id: "redo", label: "重做", command: "history.redo", shortcut: "Mod-Shift-Z" },
       ],
     },
   ],
@@ -204,6 +248,9 @@ const toolbarDefinition: ToolbarDefinition = {
  * 没有映射到图标的按钮自动回落成文字。
  */
 const TOOLBAR_ICONS: Record<string, LucideIcon> = {
+  "block-style": Type,
+  "list-ops": ListChecks,
+  "table-ops": Table,
   paragraph: Pilcrow,
   "heading-1": Heading1,
   "heading-2": Heading2,
@@ -381,6 +428,31 @@ function StatusStrip() {
   );
 }
 
+/**
+ * 菜单面板。模型只负责 Escape 与焦点归位，点空白关闭要宿主自己接。
+ * 落在触发器上的按下不算「外部」，否则它会先关一次、再被 onClick 重开。
+ */
+function MenuPanel({ children, onClose }: { children: ReactNode; onClose: () => void }) {
+  const panel = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onPointerDown(event: PointerEvent) {
+      const owner = panel.current?.closest(".editor-toolbar-item");
+      if (owner && !owner.contains(event.target as Node)) {
+        onClose();
+      }
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [onClose]);
+
+  return (
+    <div className="menu-panel" ref={panel}>
+      {children}
+    </div>
+  );
+}
+
 function Chrome({
   onSave,
   onLoadSample,
@@ -406,6 +478,7 @@ function Chrome({
           return (
             <>
               {Icon ? <Icon aria-hidden="true" size={16} strokeWidth={1.75} /> : item.label}
+              {item.menu ? <ChevronDown aria-hidden="true" size={12} strokeWidth={2} /> : null}
               {/* 按钮的可访问名由 aria-label 给，这层纯装饰，读屏不该再念一遍。 */}
               <span aria-hidden="true" className="tip">
                 {item.label}
@@ -414,6 +487,33 @@ function Chrome({
             </>
           );
         }}
+        renderMenu={(item, close) => (
+          <MenuPanel onClose={close}>
+            {(TOOLBAR_MENUS[item.id] ?? []).map((entry) => {
+              const query = editor.queryCommand(entry.command, entry.input);
+              const Icon = TOOLBAR_ICONS[entry.id];
+              return (
+                <button
+                  className="menu-item"
+                  data-active={query.active}
+                  disabled={!query.enabled}
+                  key={entry.id}
+                  onClick={() => {
+                    editor.execute(entry.command, entry.input);
+                    close();
+                  }}
+                  onMouseDown={(event) => event.preventDefault()}
+                  role="menuitem"
+                  type="button"
+                >
+                  {Icon ? <Icon aria-hidden="true" size={15} strokeWidth={1.75} /> : null}
+                  <span className="menu-item-label">{entry.label}</span>
+                  {entry.shortcut ? <kbd>{formatShortcut(entry.shortcut)}</kbd> : null}
+                </button>
+              );
+            })}
+          </MenuPanel>
+        )}
         onExecute={(item) => {
           if (item.id === "link") {
             const href = window.prompt("链接地址（仅 https/http/mailto/tel）", "https://");

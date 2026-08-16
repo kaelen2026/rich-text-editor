@@ -1,8 +1,8 @@
 /*
  * Playground 视觉方向：纸 + 控制台。
- * 编辑区是一张有厚度的纸，压在暖灰底上；工具条、状态、patch 流退成安静的界面层。
+ * 编辑区是铺满工作台的一整面纸，工具条钉在它上沿，状态与 patch 流退成安静的界面层。
  * 三层字体各司其职：纸用衬线，界面用系统无衬线，控制台用等宽。
- * 分层靠背景明度台阶（canvas 95.5% → chrome 97.8% → paper 100%）和一层柔阴影，不靠描边。
+ * 分层靠背景明度台阶（canvas 95.5% → chrome 97.8% → paper 100%），不靠描边。
  */
 
 :root {
@@ -49,9 +49,6 @@
   --icon-square-check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344'/%3E%3Cpath d='m9 11 3 3L22 4'/%3E%3C/svg%3E");
 
   --ease: cubic-bezier(0.2, 0, 0, 1);
-  --lift: 0 1px 2px oklch(27% 0.012 265 / 0.05), 0 12px 28px -16px oklch(27% 0.012 265 / 0.3);
-  --lift-focus: 0 1px 2px oklch(27% 0.012 265 / 0.06), 0 20px 40px -18px oklch(27% 0.012 265 / 0.4);
-
   font-family: var(--font-ui);
 }
 
@@ -165,7 +162,11 @@ details[open] > summary .disclosure {
   border-radius: var(--radius);
 }
 
+/* 工具条钉在视口顶部：编辑区平铺后正文会很长，滚下去还得够得着格式按钮。 */
 .chrome {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 30;
   padding: var(--s3) var(--s4);
   border-block-end: 1px solid var(--hairline);
   border-start-start-radius: calc(var(--radius) - 1px);
@@ -241,8 +242,80 @@ details[open] > summary .disclosure {
   transform: translate(-50%, 0);
 }
 
-/* 格式按钮：正方形图标槽，无底无边，只有 hover 和 active 有材质。 */
-.toolbar button {
+/* 菜单已经展开了，别再让 tooltip 压在它上面。 */
+.toolbar button[aria-expanded="true"] .tip {
+  display: none;
+}
+
+/* ── 分类菜单 ─────────────────────────────────────────── */
+
+.menu-panel {
+  position: absolute;
+  inset-block-start: calc(100% + 5px);
+  inset-inline-start: 0;
+  z-index: 40;
+  min-inline-size: 200px;
+  padding: var(--s1);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+  box-shadow:
+    0 2px 4px oklch(27% 0.012 265 / 0.06),
+    0 14px 32px -12px oklch(27% 0.012 265 / 0.28);
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  inline-size: 100%;
+  min-block-size: 30px;
+  padding: 0 var(--s2);
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  text-align: start;
+  cursor: pointer;
+  transition: background 100ms var(--ease);
+}
+
+.menu-item-label {
+  flex: 1;
+}
+
+.menu-item kbd {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+
+.menu-item:hover:not(:disabled) {
+  background: oklch(27% 0.012 265 / 0.06);
+}
+
+.menu-item[data-active="true"] {
+  color: var(--accent);
+}
+
+.menu-item[data-active="true"] kbd {
+  color: var(--accent);
+}
+
+.menu-item:disabled {
+  color: var(--ink-faint);
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/*
+ * 格式按钮：正方形图标槽，无底无边，只有 hover 和 active 有材质。
+ * 必须排除 .menu-item：菜单面板长在 .toolbar 里面，不排除的话菜单条目会被
+ * 当成方形图标槽，激活项还会跟着填成实底。
+ */
+.toolbar button:not(.menu-item) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -264,21 +337,21 @@ details[open] > summary .disclosure {
     color 120ms var(--ease);
 }
 
-.toolbar button:hover:not(:disabled) {
+.toolbar button:not(.menu-item):hover:not(:disabled) {
   background: oklch(27% 0.012 265 / 0.06);
   color: var(--ink);
 }
 
-.toolbar button:active:not(:disabled) {
+.toolbar button:not(.menu-item):active:not(:disabled) {
   transform: translateY(0.5px);
 }
 
-.toolbar button[data-active="true"] {
+.toolbar button:not(.menu-item)[data-active="true"] {
   background: var(--accent);
   color: oklch(100% 0 0);
 }
 
-.toolbar button[data-active="true"]:hover {
+.toolbar button:not(.menu-item)[data-active="true"]:hover {
   background: oklch(47% 0.16 262);
   color: oklch(100% 0 0);
 }
@@ -287,11 +360,26 @@ details[open] > summary .disclosure {
  * 禁用态刻意不给底色。旧样式给禁用按钮填了浅灰底，填色在工具栏里读起来是「这项开着」，
  * 正好和真正的激活态相反。现在底色只有一个含义：当前生效。
  */
-.toolbar button:disabled {
+.toolbar button:not(.menu-item):disabled {
   background: transparent;
   color: var(--ink-faint);
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+/*
+ * 菜单触发器不吃 active 的实底。它的 command 只是用来查状态的代理，
+ * 填成实底会读作「这项开着」，真正开没开是菜单里那一条的事。
+ */
+.toolbar button[aria-haspopup="menu"][data-active="true"],
+.toolbar button[aria-haspopup="menu"][data-active="true"]:hover {
+  background: transparent;
+  color: var(--ink);
+}
+
+.toolbar button[aria-expanded="true"] {
+  background: oklch(27% 0.012 265 / 0.09);
+  color: var(--ink);
 }
 
 /* ── 环境控制行：动作按钮和格式按钮用两套不同词汇 ───────── */
@@ -388,29 +476,23 @@ details[open] > summary .disclosure {
 
 /* ── 纸 ───────────────────────────────────────────────── */
 
+/*
+ * 编辑区平铺：不再是暖灰台面上居中的一张窄纸，而是铺满外壳的一整面。
+ * 代价是行宽跟着容器走，不再锁在 68ch，要收回来就给 .ProseMirror 加 max-inline-size。
+ */
 .stage {
-  display: flex;
-  justify-content: center;
-  padding: var(--s6) var(--s5);
   border-end-start-radius: calc(var(--radius) - 1px);
   border-end-end-radius: calc(var(--radius) - 1px);
-  background: var(--canvas);
+  background: var(--paper);
 }
 
 .paper {
-  inline-size: 100%;
-  max-inline-size: 68ch;
-  min-block-size: 380px;
-  padding: var(--s7) 44px;
-  border-radius: 3px;
-  background: var(--paper);
-  box-shadow: var(--lift);
-  transition: box-shadow 220ms var(--ease);
+  min-block-size: 62vh;
+  padding: var(--s6) var(--s7);
 }
 
-/* 签名微交互：光标落进纸里，纸被轻轻拿起来。 */
-.paper:focus-within {
-  box-shadow: var(--lift-focus);
+.workbench:focus-within {
+  border-color: var(--hairline-strong);
 }
 
 .ProseMirror {
@@ -781,7 +863,7 @@ div.co-unknown {
   outline-offset: 2px;
 }
 
-.paper:focus-within .ProseMirror:focus-visible {
+.ProseMirror:focus-visible {
   outline: none;
 }
 
@@ -789,8 +871,8 @@ div.co-unknown {
   .disclosure,
   .toolbar button,
   .tip,
-  .action,
-  .paper {
+  .menu-item,
+  .action {
     transition: none;
   }
 
@@ -815,13 +897,8 @@ div.co-unknown {
     padding: var(--s3);
   }
 
-  .stage {
-    padding: var(--s4) var(--s3);
-  }
-
   .paper {
-    max-inline-size: none;
-    min-block-size: 280px;
+    min-block-size: 55vh;
     padding: var(--s5) var(--s4);
   }
 
