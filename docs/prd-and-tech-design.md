@@ -572,10 +572,13 @@ M1 使用 `prosemirror-history`。协同（M4）必须换成 Yjs 的 UndoManager
 
 1. runtime 维护全局 `composing` 标志，通过 `SelectionSnapshot.composing` 与 `compositionChanged` 事件暴露。
 2. 组合态期间：挂起所有非用户输入事务（程序化事务、远端事务、异步回填），入队；`compositionend` 后合并应用并重新映射位置。
-3. 组合态期间：冻结覆盖当前文本节点的 Decoration 更新；不重建该节点的 NodeView。
+3. 组合态期间：冻结覆盖当前文本节点的 Decoration 更新；不重建该节点的 NodeView。执行点在 `EditorSession`——它包裹每个插件的 `decorations`，组合期间光标所在文本块范围内沿用上一次的结果，范围之外照常更新（别处的上传进度条不该被组合态冻住）。组合期间会改文档的事务都排了队，位置不动，因此旧 Decoration 直接复用是安全的。
 4. 组合态期间：输入规则与自动格式化不执行。
 5. 组合态期间调用 `execute()` 返回 `{ok:false, reason:'composing'}`，由 UI 决定禁用还是排队。
 6. 兜底超时：`compositionend` 未触发（部分输入法/异常路径）时 5 秒后强制退出组合态并冲刷队列。
+7. 第 2 条的冲刷时机不是 `compositionend` 事件本身，而是**其后的第一笔事务**（上屏文本就是那一笔），并留 250ms 兜底。ProseMirror 要在事件之后才把上屏文本从 DOM 读回模型；在那之前冲刷，读回会按 DOM 重写整个文本块，刚落地的回填连同位置一起被抹掉。冲刷还必须放进微任务，不能在读回的调用栈里插队。
+
+第 3、7 两条都是 S25 的真实浏览器用例逼出来的：前者从来没实现过（唯一的 Decoration 盖在图片节点上，这条路径没有代码走到），后者的单测在 jsdom 里一直是绿的（jsdom 没有"从 DOM 读回模型"那一步）。**组合态的正确性只有在真实浏览器里才判得了。**
 
 ### 9.7 NodeView 跨框架策略
 
@@ -713,6 +716,8 @@ clipboardData.setData('application/x-company-editor+json', JSON.stringify(payloa
 4. 校验产物是否为合法文档结构；非法则按 §11.4 降级。
 
 允许的输入结构：`p`、`br`、`strong`/`b`、`em`/`i`、`u`、`s`/`del`、`a`、`h1`~`h6`、`ul`、`ol`、`li`、`blockquote`、`pre`、`code`、`table`、`thead`、`tbody`、`tr`、`td`、`th`、`img`。
+
+**容器元素（`div`、`section`、`article`、`main` 等）是透明的**：里面的块结构原样往上并，只有连续的行内内容才收成一个段落，容器上的对齐传给它收出来的那些段落。把容器当段落处理会把标题、正文、列表拼成一行——而真实网页复制出来的 HTML 几乎总是裹着容器，`fixtures/clipboard/` 里的样本恰好都不是，这条路径因此一直没被 golden 走到（S25 修）。
 
 属性策略：
 

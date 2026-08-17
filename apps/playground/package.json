@@ -20,8 +20,11 @@
     "@kaelen/editor-react-ui": "workspace:*",
     "@kaelen/editor-schema": "workspace:*",
     "@kaelen/editor-shared-types": "workspace:*",
+    "@kaelen/editor-runtime": "workspace:*",
     "@kaelen/editor-ui-model": "workspace:*",
     "lucide-react": "^1.31.0",
+    "prosemirror-state": "^1.4.3",
+    "prosemirror-view": "^1.41.4",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },

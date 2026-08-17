@@ -70,6 +70,7 @@ import {
 } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { ColorPicker, type ColorPickerMenu } from "./color-picker";
+import { createE2EProbe, type E2EProbe, exposeE2EHooks } from "./e2e-hooks";
 import { ImageToolbar } from "./image-toolbar";
 
 const STORAGE_KEY = "playground.document";
@@ -503,27 +504,24 @@ interface Boot {
   unknownNodes: string[];
   faulty: boolean;
   baseDocument: EditorEnvelope;
+  /** 只在 `?e2e=1` 时有内容；跟着实例走，不落到模块作用域。 */
+  probe: E2EProbe;
 }
 
 function bootEditor(faulty: boolean, document: EditorEnvelope): Boot {
+  const probe = createE2EProbe();
   const editor = createEditor({
-    plugins: faulty
-      ? [
-          createLinkPlugin(),
-          createTablePlugin(),
-          createColorPlugin(),
-          createImagePlugin({ uploader: playgroundUploader }),
-          ...FAULTY_PLUGINS,
-        ]
-      : [
-          createLinkPlugin(),
-          createTablePlugin(),
-          createColorPlugin(),
-          createImagePlugin({ uploader: playgroundUploader }),
-        ],
+    plugins: [
+      createLinkPlugin(),
+      createTablePlugin(),
+      createColorPlugin(),
+      createImagePlugin({ uploader: playgroundUploader }),
+      ...(faulty ? FAULTY_PLUGINS : []),
+      ...probe.plugins,
+    ],
   });
   const result = editor.loadDocument(document);
-  return { editor, unknownNodes: result.unknownNodes, faulty, baseDocument: document };
+  return { editor, unknownNodes: result.unknownNodes, faulty, baseDocument: document, probe };
 }
 
 function ModeSwitch() {
@@ -874,7 +872,13 @@ export function App() {
   const [boot, setBoot] = useState<Boot>(() => bootEditor(false, readStoredDocument()));
   const [saved, setSaved] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const { editor, unknownNodes, faulty, baseDocument } = boot;
+  const { editor, unknownNodes, faulty, baseDocument, probe } = boot;
+
+  // 在 effect 里挂 e2e 钩子而不是在 bootEditor 里：StrictMode 会把 useState 的
+  // 初始化函数跑两遍，在那里挂上的是被丢弃的那个实例，用例拿到的编辑器从没挂载过。
+  useEffect(() => {
+    exposeE2EHooks(editor, probe);
+  }, [editor, probe]);
 
   // 规模与剪贴板策略的提示汇到同一处：对用户来说它们是同一件事——
   // "这次写入没做成，原因是什么"。

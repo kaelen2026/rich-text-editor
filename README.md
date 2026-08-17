@@ -39,11 +39,14 @@ pnpm test
 | `pnpm check` / `pnpm check:fix` | Biome 检查 / 自动修复，附带 `toDOM` 的 DOM 依赖静态检查 |
 | `pnpm typecheck` | 全仓库 `tsc --noEmit` |
 | `pnpm test` / `pnpm test:watch` | Vitest |
+| `pnpm e2e` | Playwright 真实浏览器验收：输入法组合态（CDP）与粘贴解析阶段的网络请求数。首次运行前跑一次 `pnpm exec playwright install chromium` |
 | `pnpm bench` | 性能基准与预算门禁，超预算即失败（见 [`docs/performance-budgets.md`](docs/performance-budgets.md)） |
 | `pnpm render <doc.json> [--format html\|markdown]` | 纯 Node 环境从文档 JSON 渲染 HTML 或 Markdown，**不需要 jsdom** |
 | `pnpm demo:remote-image-service` | 启动远端图片转存的本地演示服务 |
 
-CI 的 `Quality` 检查按顺序跑 `check` → `typecheck` → `test` → `bench` → commitlint。
+CI 的 `Quality` 检查按顺序跑 `check` → `typecheck` → `test` → `e2e` → `bench` → commitlint。
+
+`e2e/` 只放 jsdom 证明不了的东西，不做第二套功能回归：输入法组合态需要真实的 IME 事件时序，"inert 解析不发网络请求"需要真实浏览器才有网络栈可数。
 
 ## 用起来长什么样
 
