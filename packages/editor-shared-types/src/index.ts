@@ -90,6 +90,17 @@ export interface LoadResult {
   errors?: string[];
 }
 
+/**
+ * 文档字数。两个口径都按 Unicode 字符计，CJK 一个字算一个字符；
+ * 刻意不提供按空格分词的 word count——中文里那个数字没有意义（方案 §4.4）。
+ */
+export interface DocumentTextStats {
+  /** 全部字符。emoji 与组合字符按用户看到的一个字形计一个。 */
+  characters: number;
+  /** 不含空白字符的口径。 */
+  charactersWithoutWhitespace: number;
+}
+
 /** 命令失败原因可判别，便于线上定位（方案 §8.1）。 */
 export type CommandFailureReason =
   | "disabled"

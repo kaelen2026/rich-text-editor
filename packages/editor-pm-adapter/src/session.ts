@@ -118,6 +118,14 @@ export class EditorSession {
     return restoreDoc(this.state.doc.toJSON() as NodeJSON);
   }
 
+  /**
+   * 全文纯文本，块之间不补分隔符、叶节点不产生文本——字数是内容的量，
+   * 不是排版的量。取自活文档，因此数字数不必先把整棵树序列化成 JSON。
+   */
+  get textContent(): string {
+    return this.state.doc.textBetween(0, this.state.doc.content.size, "", "");
+  }
+
   get mounted(): boolean {
     return this.view !== null;
   }

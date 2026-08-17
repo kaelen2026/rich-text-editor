@@ -7,6 +7,7 @@ import {
 import {
   assertMigrationsDeclareReversibility,
   cloneJson,
+  countText,
   createEmptyEnvelope,
   migrateEnvelope,
   renderDocumentToHTML,
@@ -19,6 +20,7 @@ import type {
   DocumentLimitNotice,
   DocumentMigration,
   DocumentPatch,
+  DocumentTextStats,
   EditorEnvelope,
   EditorEventName,
   EditorEventPayload,
@@ -41,6 +43,10 @@ export interface Runtime {
    * 上限：保存是宿主的动作，编辑器只提供可判定的事实。
    */
   getDocumentSize(): number;
+  /**
+   * 当前文档的字数。同一次内容变更内只算一次，反复读取不重复遍历全文。
+   */
+  getTextStats(): DocumentTextStats;
   /** 从当前结构化文档生成 HTML；与服务端共用纯 JS renderer。 */
   getHTML(): string;
   execute(command: string, input?: unknown): CommandResult;
@@ -106,6 +112,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
   let documentSnapshot: EditorEnvelope | null = null;
   let documentProxy: EditorEnvelope | null = null;
   let documentSize: number | null = null;
+  let textStats: DocumentTextStats | null = null;
   // 启动期的冲突发生在宿主订阅之前，只能靠 getPluginErrors 取回。
   let pluginErrors: readonly PluginError[] = Object.freeze([...resolution.errors]);
   const listeners = new Map<EditorEventName, Set<AnyListener>>();
@@ -134,6 +141,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
     documentSnapshot = null;
     documentProxy = null;
     documentSize = null;
+    textStats = null;
     emit("change", undefined);
   }
 
@@ -289,6 +297,15 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
     getDocumentSize(): number {
       documentSize ??= utf8ByteLength(JSON.stringify(currentEnvelope()));
       return documentSize;
+    },
+
+    /**
+     * 字数按需计算并缓存到下一次变更：宿主可以在每次渲染里读它，代价只发生在
+     * 内容真的变了之后的第一次读取。引用同样稳定，可直接喂给框架订阅。
+     */
+    getTextStats(): DocumentTextStats {
+      textStats ??= countText(session.textContent);
+      return textStats;
     },
 
     getHTML(): string {

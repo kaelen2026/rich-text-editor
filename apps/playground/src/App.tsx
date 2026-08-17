@@ -560,13 +560,19 @@ function DegradedBanner() {
 
 /** 状态槽位：每种状态同字号同高度，只换颜色和圆点，切换时不跳动。 */
 function StatusStrip() {
+  const editor = useEditor();
   const dirty = useEditorSelector((snapshot) => snapshot.dirty);
   const revision = useEditorSelector((snapshot) => snapshot.revision);
   const composing = useEditorSelector((snapshot) => snapshot.composing);
+  // 直接问，不用 memo：runtime 已按内容变更缓存，重渲染时取回的是同一个对象。
+  const stats = editor.getTextStats();
   return (
     <span className={dirty ? "status status-dirty" : "status"}>
       <span className="status-dot" />
-      修订号 {revision} · {dirty ? "未保存" : "已保存"}
+      修订号 {revision} · {dirty ? "未保存" : "已保存"} ·{" "}
+      <span title={`不含空白 ${stats.charactersWithoutWhitespace.toLocaleString()} 字`}>
+        {stats.characters.toLocaleString()} 字
+      </span>
       {composing ? <span className="status-composing"> · 输入法组合中，命令已暂停</span> : null}
     </span>
   );

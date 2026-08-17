@@ -2,6 +2,7 @@ import { createRuntime, type RuntimeOptions } from "@kaelen/editor-runtime";
 import type {
   CommandQuery,
   CommandResult,
+  DocumentTextStats,
   EditorEnvelope,
   EditorEventName,
   EditorEventPayload,
@@ -32,6 +33,11 @@ export interface RichEditor {
    * 上限（方案 §14.2）——保存是宿主的动作，编辑器只提供可判定的事实。
    */
   getDocumentSize(): number;
+  /**
+   * 当前文档字数（方案 §4.4）。按 Unicode 字符计、CJK 按字，另有不含空白的口径；
+   * 同一次内容变更内只算一次，引用稳定，可直接用于框架订阅。
+   */
+  getTextStats(): DocumentTextStats;
   /** 从当前结构化文档渲染 HTML；可在 Node 服务端直接调用。 */
   getHTML(): string;
 
@@ -84,6 +90,7 @@ export function createEditor(options: EditorOptions = {}): RichEditor {
     loadDocument: (input) => runtime.loadDocument(input),
     getDocument: () => runtime.getDocument(),
     getDocumentSize: () => runtime.getDocumentSize(),
+    getTextStats: () => runtime.getTextStats(),
     getHTML: () => runtime.getHTML(),
     execute: (command, input) => runtime.execute(command, input),
     queryCommand: (command, input) => runtime.queryCommand(command, input),

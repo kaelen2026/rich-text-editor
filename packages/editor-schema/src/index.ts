@@ -26,3 +26,4 @@ export {
   targetVersion,
 } from "./migrate";
 export { type RenderSchema, renderDocumentToHTML } from "./render";
+export { countDocumentText, countText } from "./text-stats";
