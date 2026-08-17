@@ -1,5 +1,6 @@
 import { createEditor, type EditorOptions, type RichEditor } from "@kaelen/editor-api";
 import { markdownToDocument } from "@kaelen/editor-markdown";
+import { createAiPlugin } from "@kaelen/editor-plugin-ai";
 import { createColorPlugin } from "@kaelen/editor-plugin-color";
 import { createImagePlugin } from "@kaelen/editor-plugin-image";
 import { createLinkPlugin } from "@kaelen/editor-plugin-link";
@@ -54,6 +55,7 @@ import {
   Redo2,
   Rows3,
   Save,
+  Sparkles,
   Split,
   SquareCheckBig,
   Strikethrough,
@@ -71,9 +73,10 @@ import {
   Zap,
 } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { createPlaygroundAi } from "./ai";
 import { createCollabOptions } from "./collab";
 import { ColorPicker, type ColorPickerMenu } from "./color-picker";
-import { createE2EProbe, type E2EProbe, exposeE2EHooks } from "./e2e-hooks";
+import { createE2EProbe, E2E_ENABLED, type E2EProbe, exposeE2EHooks } from "./e2e-hooks";
 import { ImageToolbar } from "./image-toolbar";
 
 const STORAGE_KEY = "playground.document";
@@ -233,6 +236,13 @@ const TOOLBAR_MENUS: Record<string, readonly MenuEntry[]> = {
       input: { language },
     })),
   ],
+  "ai-ops": [
+    { id: "ai-rewrite", label: "改写选中文字", command: "ai.rewrite" },
+    { id: "ai-continue", label: "从光标处续写", command: "ai.continue" },
+    { id: "ai-summarize", label: "摘要选中文字", command: "ai.summarize" },
+    { id: "ai-cancel", label: "取消 / 收起", command: "ai.cancel" },
+    { id: "ai-retry", label: "失败后重试", command: "ai.retry" },
+  ],
   "list-ops": [
     { id: "checked", label: "勾选", command: "list.toggleChecked" },
     { id: "indent", label: "缩进", command: "list.indent", shortcut: "Tab" },
@@ -373,6 +383,12 @@ const toolbarDefinition: ToolbarDefinition = {
       ],
     },
     {
+      label: "AI",
+      items: [
+        { id: "ai-ops", label: "AI", command: "ai.rewrite", menu: true, alwaysEnabled: true },
+      ],
+    },
+    {
       label: "历史",
       items: [
         { id: "undo", label: "撤销", command: "history.undo", shortcut: "Mod-Z" },
@@ -393,6 +409,7 @@ const TOOLBAR_ICONS: Record<string, LucideIcon> = {
   "align-center": TextAlignCenter,
   "align-right": TextAlignEnd,
   "align-justify": TextAlignJustify,
+  "ai-ops": Sparkles,
   "list-ops": ListChecks,
   "table-ops": Table,
   paragraph: Pilcrow,
@@ -511,17 +528,21 @@ interface Boot {
   probe: E2EProbe;
   /** 只在 `?collab=<房间名>` 时有内容。连接跟着页面走，不跟着实例走。 */
   collab: CollabSessionOptions | undefined;
+  /** 模拟 AI 服务。`?e2e=1` 下由用例手动兑现，见 `createPlaygroundAi`。 */
+  ai: ReturnType<typeof createPlaygroundAi>;
 }
 
 function bootEditor(faulty: boolean, document: EditorEnvelope): Boot {
   const probe = createE2EProbe();
   const collab = createCollabOptions();
+  const ai = createPlaygroundAi(E2E_ENABLED);
   const editor = createEditor({
     plugins: [
       createLinkPlugin(),
       createTablePlugin(),
       createColorPlugin(),
       createImagePlugin({ uploader: playgroundUploader }),
+      createAiPlugin({ service: ai.service }),
       ...(faulty ? FAULTY_PLUGINS : []),
       ...probe.plugins,
     ],
@@ -537,6 +558,7 @@ function bootEditor(faulty: boolean, document: EditorEnvelope): Boot {
     baseDocument: document,
     probe,
     collab,
+    ai,
   };
 }
 
@@ -921,13 +943,13 @@ export function App() {
   const [boot, setBoot] = useState<Boot>(() => bootEditor(false, readStoredDocument()));
   const [saved, setSaved] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const { editor, unknownNodes, faulty, baseDocument, probe } = boot;
+  const { editor, unknownNodes, faulty, baseDocument, probe, ai } = boot;
 
   // 在 effect 里挂 e2e 钩子而不是在 bootEditor 里：StrictMode 会把 useState 的
   // 初始化函数跑两遍，在那里挂上的是被丢弃的那个实例，用例拿到的编辑器从没挂载过。
   useEffect(() => {
-    exposeE2EHooks(editor, probe);
-  }, [editor, probe]);
+    exposeE2EHooks(editor, probe, ai.settle);
+  }, [editor, probe, ai]);
 
   // 规模与剪贴板策略的提示汇到同一处：对用户来说它们是同一件事——
   // "这次写入没做成，原因是什么"。
@@ -988,7 +1010,7 @@ export function App() {
           </summary>
           <p className="notes-body">
             {
-              "标题、引用、列表、待办、代码块、分隔线都在工具栏上，按钮的 tooltip 是对应快捷键；列表里 Tab / Shift+Tab 升降级，Shift+Enter 软换行。选中文字后在“文字颜色”“背景色”里挑一格上色，面板底部的“清除”只去掉这一种颜色，前景色和背景色互不影响。点“图片”选择本地文件，或把图片拖入/粘贴到编辑区：上传中会显示占位，完成后回填；上传期间继续编辑，目标位置会随事务迁移。复制上传中图片不会复制运行时 uploadId。图片插入后可以反复回去改：单击选中，图片上方浮出快捷条（旋转、环绕、替换、删除），双击进入编辑模态——在整幅原图上拖出裁剪框、挑滤镜、调尺寸与替代文本，预览用的就是文档渲染那一套推导，点“应用”才写入，撤销一步即可回到改之前。裁剪与旋转要靠上传服务返回的原始尺寸，拿不到尺寸时这两项会被禁用。输入 #、-、1.、> 或 ``` 加空格可触发结构规则；中文/日文等输入法组合期间工具栏会暂停，并在候选词确认后恢复。复制会把可还原的 Slice 写入 HTML 的 data-co-slice，粘贴时优先恢复它；Cmd/Ctrl+Shift+V 与代码块内粘贴始终只取纯文本。切换状态可以看只读态与禁用态的区别；点保存写入 localStorage，刷新页面内容仍在。勾选“注入故障插件”会装入一批坏掉的第三方插件：重名、缺依赖、循环依赖、覆盖核心命令、命令抛错，用来看熔断，每种坏法都只让它自己失效。文档规模上限也在这里能看到：节点数超过 20000 的插入由编辑器在事务入口拒绝，超过 2MB 的文档由本页在写 localStorage 之前拒绝，两种都会在顶部提示，且都只拦新写入——已经超限的历史文档照常打得开。"
+              "标题、引用、列表、待办、代码块、分隔线都在工具栏上，按钮的 tooltip 是对应快捷键；列表里 Tab / Shift+Tab 升降级，Shift+Enter 软换行。选中文字后在“文字颜色”“背景色”里挑一格上色，面板底部的“清除”只去掉这一种颜色，前景色和背景色互不影响。点“图片”选择本地文件，或把图片拖入/粘贴到编辑区：上传中会显示占位，完成后回填；上传期间继续编辑，目标位置会随事务迁移。复制上传中图片不会复制运行时 uploadId。图片插入后可以反复回去改：单击选中，图片上方浮出快捷条（旋转、环绕、替换、删除），双击进入编辑模态——在整幅原图上拖出裁剪框、挑滤镜、调尺寸与替代文本，预览用的就是文档渲染那一套推导，点“应用”才写入，撤销一步即可回到改之前。裁剪与旋转要靠上传服务返回的原始尺寸，拿不到尺寸时这两项会被禁用。输入 #、-、1.、> 或 ``` 加空格可触发结构规则；中文/日文等输入法组合期间工具栏会暂停，并在候选词确认后恢复。复制会把可还原的 Slice 写入 HTML 的 data-co-slice，粘贴时优先恢复它；Cmd/Ctrl+Shift+V 与代码块内粘贴始终只取纯文本。工具栏最右边的“AI”菜单演示改写、续写与摘要：选中一段点“改写”，会出现生成中的提示并逐字预览，**这段预览不进文档**；生成期间可以继续在别处打字甚至删掉被改写的那段——结果要么落回迁移后的正确位置，要么在目标消失时被整个丢弃，撤销一步即可回到改写之前。选中的文字里含“机密”会走拒答分支，失败后可在同一菜单里重试或收起。这里接的是一个不联网的模拟服务，返回的文字刻意一眼能看出是模拟的：这一片要演示的是位置契约，不是模型能力。切换状态可以看只读态与禁用态的区别；点保存写入 localStorage，刷新页面内容仍在。勾选“注入故障插件”会装入一批坏掉的第三方插件：重名、缺依赖、循环依赖、覆盖核心命令、命令抛错，用来看熔断，每种坏法都只让它自己失效。文档规模上限也在这里能看到：节点数超过 20000 的插入由编辑器在事务入口拒绝，超过 2MB 的文档由本页在写 localStorage 之前拒绝，两种都会在顶部提示，且都只拦新写入——已经超限的历史文档照常打得开。"
             }
           </p>
         </details>
