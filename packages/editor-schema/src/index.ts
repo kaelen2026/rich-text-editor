@@ -20,6 +20,13 @@ export {
   validateEnvelope,
 } from "./envelope";
 export {
+  escapeBlockText,
+  escapeInline,
+  escapeLinkDestination,
+  flattenTableCell,
+} from "./markdown-escape";
+export { documentToMarkdown, prefixLines } from "./markdown-serialize";
+export {
   assertMigrationsDeclareReversibility,
   type MigrateResult,
   migrateEnvelope,

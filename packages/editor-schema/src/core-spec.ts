@@ -1,8 +1,10 @@
 import type {
+  CoreMarkdownParseRule,
   CoreMarkSpec,
   CoreNodeSpec,
   CoreNodeView,
   DomOutputSpec,
+  NodeJSON,
 } from "@kaelen/editor-shared-types";
 
 /** 兜底节点名。属于冻结核心集，永不改名。 */
@@ -91,6 +93,52 @@ function codeBlockDOM(language: unknown): DomOutputSpec {
 }
 
 /**
+ * 标题的 Markdown 解析规则。和 `parseDOM` 一样每个标签一条常量规则，不需要
+ * 从标签名里算层级的钩子。`h5`/`h6` 归到 `h4`——与 §11.3 的外部 HTML 降级
+ * 同一条规则，两条导入路径不该给出不同的结构。
+ */
+const HEADING_FROM_MARKDOWN: CoreMarkdownParseRule[] = [
+  { token: "heading", tag: "h1", attrs: { level: 1 } },
+  { token: "heading", tag: "h2", attrs: { level: 2 } },
+  { token: "heading", tag: "h3", attrs: { level: 3 } },
+  { token: "heading", tag: "h4", attrs: { level: 4 } },
+  { token: "heading", tag: "h5", attrs: { level: 4 } },
+  { token: "heading", tag: "h6", attrs: { level: 4 } },
+];
+
+/**
+ * 围栏长度必须超过内容里最长的一串反引号，否则代码里出现 ` ``` ` 就会把围栏
+ * 提前收掉，后半段代码变成正文。代码块的下限是三个（CommonMark 规定），
+ * 行内代码跨的下限是一个。
+ */
+function fenceFor(text: string, minimum: number): string {
+  const longest = [...text.matchAll(/`+/g)].reduce((max, [run]) => Math.max(max, run.length), 0);
+  return "`".repeat(Math.max(minimum, longest + 1));
+}
+
+/** 代码块的正文：内容只可能是文本节点（`content: "text*"`）。 */
+function codeText(content: readonly NodeJSON[]): string {
+  return content.map((child) => child.text ?? "").join("");
+}
+
+/**
+ * 兜底节点导出 Markdown 时取出 `attrs.original` 里的文本。
+ *
+ * Markdown 里没有"我不认识这个结构"的表达，占位说明语又不是用户写的东西。
+ * 因此按 §9.3 的同一条立场处理：丢格式，不丢内容——原始子树的文字照常出现在
+ * 导出结果里，结构留在信封里等插件装回来。
+ */
+function originalText(original: unknown): string {
+  if (typeof original !== "object" || original === null) {
+    return "";
+  }
+  const node = original as NodeJSON;
+  const own = node.text ?? "";
+  const children = (node.content ?? []).map((child) => originalText(child)).join("");
+  return own + children;
+}
+
+/**
  * 冻结核心节点集：不带命名空间前缀，永不改名（方案 §9.2）。
  * paragraph 必须排在其余块节点之前——ProseMirror 用声明顺序决定
  * `block+` 位置的默认节点类型，换个顺序默认块就不是段落了。
@@ -103,6 +151,10 @@ export const coreNodes: Record<string, CoreNodeSpec> = {
     attrs: { align: { default: null } },
     parseDOM: [{ tag: "p", attrsFromDOM: ALIGN_FROM_DOM }],
     toDOM: (node) => ["p", ...alignAttributes(node.attrs.align), 0],
+    // 对齐没有 Markdown 表达，导出时丢掉：Markdown 是交换格式，丢的是格式
+    // 不是文字，存储格式仍然是信封 JSON（方案 §4.3）。
+    toMarkdown: (node, context) => context.inline(node.content),
+    fromMarkdown: [{ token: "paragraph" }],
   },
   text: { group: "inline" },
 
@@ -120,6 +172,9 @@ export const coreNodes: Record<string, CoreNodeSpec> = {
       { tag: "h4", attrs: { level: 4 }, attrsFromDOM: ALIGN_FROM_DOM },
     ],
     toDOM: (node) => [headingTag(node.attrs.level), ...alignAttributes(node.attrs.align), 0],
+    toMarkdown: (node, context) =>
+      `${"#".repeat(isHeadingLevel(node.attrs.level) ? node.attrs.level : 1)} ${context.inline(node.content)}`,
+    fromMarkdown: HEADING_FROM_MARKDOWN,
   },
 
   blockquote: {
@@ -128,12 +183,18 @@ export const coreNodes: Record<string, CoreNodeSpec> = {
     defining: true,
     parseDOM: [{ tag: "blockquote" }],
     toDOM: () => ["blockquote", 0],
+    toMarkdown: (node, context) => context.prefixLines(context.blocks(node.content), "> "),
+    fromMarkdown: [{ token: "blockquote" }],
   },
 
   horizontal_rule: {
     group: "block",
     parseDOM: [{ tag: "hr" }],
     toDOM: () => ["hr"],
+    // `***` 与 `___` 也是合法分隔线，但 `---` 是重录 fixture 时最不容易看错的
+    // 一种，导出只用这一种写法，解析三种都收。
+    toMarkdown: () => "---",
+    fromMarkdown: [{ token: "hr" }],
   },
 
   code_block: {
@@ -165,6 +226,19 @@ export const coreNodes: Record<string, CoreNodeSpec> = {
       { tag: "pre", preserveWhitespace: "full" },
     ],
     toDOM: (node) => codeBlockDOM(node.attrs.language),
+    toMarkdown: (node) => {
+      const text = codeText(node.content).replace(/\n$/, "");
+      const fence = fenceFor(text, 3);
+      return `${fence}${isCodeLanguage(node.attrs.language) ? node.attrs.language : ""}\n${text}\n${fence}`;
+    },
+    // `fence` 是围栏写法，`code_block` 是四空格缩进写法；后者没有语言串。
+    fromMarkdown: [
+      {
+        token: "fence",
+        attrsFromToken: { language: { from: "info", type: "token", default: null } },
+      },
+      { token: "code_block" },
+    ],
   },
 
   bullet_list: {
@@ -172,6 +246,9 @@ export const coreNodes: Record<string, CoreNodeSpec> = {
     group: "block",
     parseDOM: [{ tag: "ul" }],
     toDOM: () => ["ul", 0],
+    toMarkdown: (node, context) =>
+      node.content.map((item) => context.prefixLines(context.block(item), "- ", "  ")).join("\n"),
+    fromMarkdown: [{ token: "bullet_list" }],
   },
   ordered_list: {
     content: "list_item+",
@@ -180,6 +257,24 @@ export const coreNodes: Record<string, CoreNodeSpec> = {
     parseDOM: [{ tag: "ol" }],
     toDOM: (node) =>
       node.attrs.start === 1 ? ["ol", 0] : ["ol", { start: String(node.attrs.start) }, 0],
+    toMarkdown: (node, context) => {
+      const start = Number.isInteger(node.attrs.start) ? (node.attrs.start as number) : 1;
+      return node.content
+        .map((item, index) => {
+          // 续行缩进要和序号一样宽，否则 `10.` 之后的续行会掉出列表项。
+          const marker = `${start + index}. `;
+          return context.prefixLines(context.block(item), marker, " ".repeat(marker.length));
+        })
+        .join("\n");
+    },
+    fromMarkdown: [
+      {
+        token: "ordered_list",
+        attrsFromToken: {
+          start: { from: "attribute", attribute: "start", type: "integer", min: 1, default: 1 },
+        },
+      },
+    ],
   },
   /** `paragraph block*` 是列表项能拆分、能嵌套子列表的前提。 */
   list_item: {
@@ -187,6 +282,10 @@ export const coreNodes: Record<string, CoreNodeSpec> = {
     defining: true,
     parseDOM: [{ tag: "li" }],
     toDOM: () => ["li", 0],
+    // 列表标记由父列表加，列表项自己只负责内容：有序和无序的标记宽度不同，
+    // 而缩进必须跟着标记宽度走。
+    toMarkdown: (node, context) => context.blocks(node.content),
+    fromMarkdown: [{ token: "list_item" }],
   },
 
   // 待办列表用 data 属性区分，优先级高于普通 ul/li，否则会先被无序列表吃掉。
@@ -195,6 +294,12 @@ export const coreNodes: Record<string, CoreNodeSpec> = {
     group: "block",
     parseDOM: [{ tag: 'ul[data-type="task-list"]', priority: 60 }],
     toDOM: () => ["ul", { "data-type": "task-list" }, 0],
+    toMarkdown: (node, context) =>
+      node.content.map((item) => context.prefixLines(context.block(item), "- ", "  ")).join("\n"),
+    // `task_list` / `task_item` 不是 markdown-it 的 token：GFM 的复选框只是列表项
+    // 正文开头的一段文字。Markdown 包在解析前把带复选框的列表改写成这两个 token，
+    // 映射本身因此仍然是声明式的。
+    fromMarkdown: [{ token: "task_list" }],
   },
   task_item: {
     content: "paragraph block*",
@@ -207,6 +312,21 @@ export const coreNodes: Record<string, CoreNodeSpec> = {
     // 勾选框由 CSS 画：`toDOM` 只能返回纯数据，可交互的复选框需要 NodeView，
     // 那是后续切片的事；勾选走 `list.toggleChecked` 命令。
     toDOM: (node) => ["li", { "data-checked": node.attrs.checked === true ? "true" : "false" }, 0],
+    // 复选框只出现在首行，因此续行前缀为空——父列表随后再统一加 `- ` 和缩进。
+    toMarkdown: (node, context) =>
+      context.prefixLines(
+        context.blocks(node.content),
+        node.attrs.checked === true ? "[x] " : "[ ] ",
+        "",
+      ),
+    fromMarkdown: [
+      {
+        token: "task_item",
+        attrsFromToken: {
+          checked: { from: "attribute", attribute: "checked", type: "boolean", default: false },
+        },
+      },
+    ],
   },
 
   hard_break: {
@@ -215,6 +335,10 @@ export const coreNodes: Record<string, CoreNodeSpec> = {
     selectable: false,
     parseDOM: [{ tag: "br" }],
     toDOM: () => ["br"],
+    // 反斜杠换行而不是行尾两个空格：后者在编辑器和 diff 里都看不见，
+    // 一次顺手的 trim 就把硬换行改没了。
+    toMarkdown: () => "\\\n",
+    fromMarkdown: [{ token: "hardbreak" }],
   },
 
   /**
@@ -229,6 +353,7 @@ export const coreNodes: Record<string, CoreNodeSpec> = {
     marks: "",
     attrs: { nodeName: {}, original: {} },
     toDOM: (node) => unknownPlaceholder("div", node),
+    toMarkdown: (node, context) => context.escapeText(originalText(node.attrs.original)),
   },
   [UNKNOWN_INLINE]: {
     group: "inline",
@@ -237,6 +362,7 @@ export const coreNodes: Record<string, CoreNodeSpec> = {
     marks: "",
     attrs: { nodeName: {}, original: {} },
     toDOM: (node) => unknownPlaceholder("span", node),
+    toMarkdown: (node, context) => context.escapeText(originalText(node.attrs.original)),
   },
 };
 
@@ -245,14 +371,22 @@ export const coreMarks: Record<string, CoreMarkSpec> = {
   strong: {
     parseDOM: [{ tag: "strong" }, { tag: "b" }],
     toDOM: () => ["strong", 0],
+    toMarkdown: (_mark, content) => `**${content}**`,
+    fromMarkdown: [{ token: "strong" }],
   },
   em: {
     parseDOM: [{ tag: "em" }, { tag: "i" }],
     toDOM: () => ["em", 0],
+    // `*` 而不是 `_`：下划线在标识符中间不构成强调，`snake_case_word` 一类的
+    // 文本会让两种写法的解析结果不一致。
+    toMarkdown: (_mark, content) => `*${content}*`,
+    fromMarkdown: [{ token: "em" }],
   },
   underline: {
     parseDOM: [{ tag: "u" }, { style: "text-decoration=underline" }],
     toDOM: () => ["u", 0],
+    // Markdown 没有下划线。刻意不退回 `<u>`：那是把 HTML 塞进 Markdown，
+    // 换个渲染器就成了字面量尖括号。按丢格式不丢内容处理（方案 §4.3）。
   },
   strikethrough: {
     parseDOM: [
@@ -262,9 +396,20 @@ export const coreMarks: Record<string, CoreMarkSpec> = {
       { style: "text-decoration=line-through" },
     ],
     toDOM: () => ["s", 0],
+    toMarkdown: (_mark, content) => `~~${content}~~`,
+    fromMarkdown: [{ token: "s" }],
   },
   code: {
     parseDOM: [{ tag: "code" }],
     toDOM: () => ["code", 0],
+    // 代码跨里没有反斜杠转义，内容一律字面量；反引号只能靠加长围栏来躲，
+    // 两端补空格是 CommonMark 规定的写法，解析时会被去掉。
+    markdownLiteral: true,
+    toMarkdown: (_mark, content) => {
+      const fence = fenceFor(content, 1);
+      const pad = content.startsWith("`") || content.endsWith("`") ? " " : "";
+      return `${fence}${pad}${content}${pad}${fence}`;
+    },
+    fromMarkdown: [{ token: "code_inline" }],
   },
 };

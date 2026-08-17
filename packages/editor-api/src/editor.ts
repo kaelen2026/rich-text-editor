@@ -1,4 +1,5 @@
 import { createRuntime, type RuntimeOptions } from "@kaelen/editor-runtime";
+import type { RenderSchema } from "@kaelen/editor-schema";
 import type {
   CommandQuery,
   CommandResult,
@@ -40,6 +41,21 @@ export interface RichEditor {
   getTextStats(): DocumentTextStats;
   /** 从当前结构化文档渲染 HTML；可在 Node 服务端直接调用。 */
   getHTML(): string;
+  /**
+   * 从当前结构化文档导出 Markdown（方案 §4.3）。同样可在服务端直接调用。
+   *
+   * Markdown 表达不了的东西（颜色、对齐、下划线、图片的二次编辑属性、单元格
+   * 合并）在导出结果里丢格式不丢文字，文档本身一字未动。
+   */
+  getMarkdown(): string;
+  /**
+   * 已启用插件贡献的节点/标记规格，供外部序列化器使用。
+   *
+   * Markdown 导入是这样接的：
+   * `editor.loadDocument({ ...envelope, doc: markdownToDocument(md, editor.getSchemaExtensions()).doc })`。
+   * 解析器留在可选包 `@kaelen/editor-markdown` 里，只导出的宿主不为它付出体积。
+   */
+  getSchemaExtensions(): RenderSchema;
 
   execute(command: string, input?: unknown): CommandResult;
   /**
@@ -92,6 +108,8 @@ export function createEditor(options: EditorOptions = {}): RichEditor {
     getDocumentSize: () => runtime.getDocumentSize(),
     getTextStats: () => runtime.getTextStats(),
     getHTML: () => runtime.getHTML(),
+    getMarkdown: () => runtime.getMarkdown(),
+    getSchemaExtensions: () => runtime.getSchemaExtensions(),
     execute: (command, input) => runtime.execute(command, input),
     queryCommand: (command, input) => runtime.queryCommand(command, input),
     getMode: () => runtime.getMode(),

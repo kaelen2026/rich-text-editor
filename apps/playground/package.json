@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@kaelen/editor-api": "workspace:*",
+    "@kaelen/editor-markdown": "workspace:*",
     "@kaelen/editor-plugin-color": "workspace:*",
     "@kaelen/editor-plugin-image": "workspace:*",
     "@kaelen/editor-plugin-link": "workspace:*",

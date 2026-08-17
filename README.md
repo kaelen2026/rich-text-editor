@@ -8,7 +8,7 @@
 
 段落与 h1–h4 标题、引用、分隔线、代码块、无序/有序/待办列表、粗体斜体下划线删除线行内代码、链接、表格（含合并单元格与键盘导航）、图片（上传、拖入、粘贴，以及尺寸/裁剪/旋转/滤镜/环绕的非破坏性二次编辑）、文字与背景颜色、块级水平对齐。
 
-复制粘贴覆盖编辑器内部（保开合深度的 Slice）、外部网页 HTML、Word、Excel 与纯文本，全部经 Schema 白名单与 inert 解析。远端图片一律服务端转存，带完整 SSRF 控制。
+复制粘贴覆盖编辑器内部（保开合深度的 Slice）、外部网页 HTML、Word、Excel 与纯文本，全部经 Schema 白名单与 inert 解析。远端图片一律服务端转存，带完整 SSRF 控制。文档可导出 HTML 与 Markdown，也可从 Markdown 导入。
 
 底层原语已经就位但尚未做成功能：`DocumentPatch` 增量变更流、位置映射契约、信封 `annotations` 评论锚点字段。协同、评论、版本历史、AI 属于 M4，本仓库暂不覆盖。
 
@@ -40,7 +40,7 @@ pnpm test
 | `pnpm typecheck` | 全仓库 `tsc --noEmit` |
 | `pnpm test` / `pnpm test:watch` | Vitest |
 | `pnpm bench` | 性能基准与预算门禁，超预算即失败（见 [`docs/performance-budgets.md`](docs/performance-budgets.md)） |
-| `pnpm render <doc.json>` | 纯 Node 环境从文档 JSON 渲染 HTML，**不需要 jsdom** |
+| `pnpm render <doc.json> [--format html\|markdown]` | 纯 Node 环境从文档 JSON 渲染 HTML 或 Markdown，**不需要 jsdom** |
 | `pnpm demo:remote-image-service` | 启动远端图片转存的本地演示服务 |
 
 CI 的 `Quality` 检查按顺序跑 `check` → `typecheck` → `test` → `bench` → commitlint。
@@ -86,6 +86,20 @@ if (editor.getDocumentSize() <= DOCUMENT_JSON_LIMIT_BYTES) {
 }
 ```
 
+Markdown 导出直接问编辑器要；导入由宿主把可选的解析包接上去：
+
+```ts
+import { markdownToDocument } from "@kaelen/editor-markdown";
+
+const markdown = editor.getMarkdown();
+
+const { doc, degrades } = markdownToDocument(markdown, editor.getSchemaExtensions());
+editor.loadDocument({ ...editor.getDocument(), doc });
+// degrades 里是"图片按链接导入"这类需要告诉用户的降级，不是错误。
+```
+
+Markdown 只是交换格式，存储始终是信封 JSON：它表达不了的东西（颜色、对齐、下划线、图片的裁剪旋转、单元格合并）在导出结果里丢格式不丢文字，文档本身一字未动。降级口径见方案 [§4.3](docs/prd-and-tech-design.md)。
+
 Vue 侧是同一套语义：`@kaelen/editor-vue` 提供 `EditorProvider` / `EditorContent` 与对应 Composable，`@kaelen/editor-vue-ui` 复用同一个 `editor-ui-model` 渲染工具栏。
 
 ## 架构一览
@@ -111,7 +125,8 @@ ProseMirror
 | 包 | 职责 |
 | --- | --- |
 | `editor-shared-types` | 信封、`DocumentPatch`、事件、`CoreNodeSpec` 等共享协议。零依赖 |
-| `editor-schema` | 冻结核心节点/标记、信封校验、迁移链、`DOMOutputSpec`→HTML 渲染 |
+| `editor-schema` | 冻结核心节点/标记、信封校验、迁移链、`DOMOutputSpec`→HTML 渲染、JSON→Markdown 导出 |
+| `editor-markdown` | Markdown→JSON 解析。唯一带 CommonMark 解析器依赖的包，按需安装 |
 | `editor-pm-adapter` | ProseMirror 适配层：核心命令、剪贴板管线、外部 HTML 解析、Step ↔ PatchOp |
 | `editor-runtime` | 插件拓扑排序与冲突降级、命令门禁、事件派发、自动保存、熔断 |
 | `editor-api` | 面向业务的窄接口，**刻意不暴露任何 ProseMirror 类型** |

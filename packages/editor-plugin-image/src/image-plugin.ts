@@ -1,5 +1,6 @@
 import type { EditorSession, SessionBridge, SessionExtension } from "@kaelen/editor-pm-adapter";
 import type { EditorPlugin, SessionCommand } from "@kaelen/editor-runtime";
+import { escapeInline, escapeLinkDestination } from "@kaelen/editor-schema";
 import type { Node as ProseMirrorNode } from "prosemirror-model";
 import {
   type Command,
@@ -132,6 +133,19 @@ export function createImagePlugin(options: ImagePluginOptions): EditorPlugin {
               ],
             ],
           ];
+        },
+        /**
+         * `![alt](src)`。二次编辑的那一组属性（尺寸、裁剪、旋转、滤镜、环绕）
+         * 在 Markdown 里没有写法，导出时丢掉——它们本来就是非破坏性的展示属性，
+         * 原图与替代文本都还在，存储格式里那组属性也一字未动（方案 §4.3）。
+         *
+         * 反方向刻意不做映射：Markdown 里的图片地址来源不可信，直接写进
+         * `src` 就是热链（方案 §11.3.1）。导入时由 Markdown 包统一降级为链接。
+         */
+        toMarkdown: (node) => {
+          const src = typeof node.attrs.src === "string" ? node.attrs.src : "";
+          const alt = typeof node.attrs.alt === "string" ? node.attrs.alt : "";
+          return `![${escapeInline(alt)}](${escapeLinkDestination(src)})`;
         },
       });
     },

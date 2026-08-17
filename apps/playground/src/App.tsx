@@ -1,4 +1,5 @@
 import { createEditor, type EditorOptions, type RichEditor } from "@kaelen/editor-api";
+import { markdownToDocument } from "@kaelen/editor-markdown";
 import { createColorPlugin } from "@kaelen/editor-plugin-color";
 import { createImagePlugin } from "@kaelen/editor-plugin-image";
 import { createLinkPlugin } from "@kaelen/editor-plugin-link";
@@ -797,6 +798,78 @@ function PatchPanel({ baseDocument }: { baseDocument: EditorEnvelope }) {
   );
 }
 
+/**
+ * Markdown 导入导出。
+ *
+ * 导出走 `editor.getMarkdown()`；导入是宿主自己把解析器和编辑器接起来——
+ * 解析依赖装在可选包 `@kaelen/editor-markdown` 里，不进内核（方案 §4.3）。
+ */
+function MarkdownPanel() {
+  const editor = useEditor();
+  const [draft, setDraft] = useState("");
+  const [notes, setNotes] = useState<string[]>([]);
+
+  function exportMarkdown() {
+    setDraft(editor.getMarkdown());
+    setNotes([]);
+  }
+
+  function importMarkdown() {
+    const imported = markdownToDocument(draft, editor.getSchemaExtensions());
+    // 保留信封的版本与插件记录，只换文档体。
+    const result = editor.loadDocument({ ...editor.getDocument(), doc: imported.doc });
+    setNotes([
+      result.ok ? "已导入。" : `导入失败：${result.errors?.join("；") ?? "未知错误"}`,
+      ...imported.degrades.map((degrade) => `${degrade.message}（${degrade.count} 处）`),
+    ]);
+  }
+
+  return (
+    <details className="console">
+      <summary>
+        <ChevronRight aria-hidden="true" className="disclosure" size={14} strokeWidth={2} />
+        <span className="console-title">Markdown 导入导出</span>
+      </summary>
+      <div className="console-body">
+        <p>
+          导出是有损的：颜色、对齐、下划线、图片的裁剪旋转、单元格合并在 Markdown
+          里没有写法，只留文字与结构，文档本身一字未动。导入时图片一律降级为链接——
+          远端图片必须先经服务端转存才能进文档。
+        </p>
+        <div className="env">
+          <button type="button" className="action" onClick={exportMarkdown}>
+            从当前文档导出
+          </button>
+          <button
+            type="button"
+            className="action action-primary"
+            onClick={importMarkdown}
+            disabled={draft.length === 0}
+          >
+            导入并替换文档
+          </button>
+        </div>
+        <textarea
+          className="markdown-draft"
+          value={draft}
+          spellCheck={false}
+          rows={12}
+          onChange={(event) => setDraft(event.target.value)}
+          aria-label="Markdown 文本"
+          placeholder="点“从当前文档导出”，或直接在这里粘贴一份 Markdown 再导入。"
+        />
+        {notes.length > 0 ? (
+          <ul>
+            {notes.map((note) => (
+              <li key={note}>{note}</li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
+    </details>
+  );
+}
+
 export function App() {
   const [boot, setBoot] = useState<Boot>(() => bootEditor(false, readStoredDocument()));
   const [saved, setSaved] = useState<string | null>(null);
@@ -892,6 +965,7 @@ export function App() {
           </div>
         </div>
         <PatchPanel baseDocument={baseDocument} />
+        <MarkdownPanel />
         {saved ? (
           <details className="console">
             <summary>

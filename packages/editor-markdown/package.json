@@ -1,5 +1,5 @@
 {
-  "name": "@kaelen/editor-plugin-table",
+  "name": "@kaelen/editor-markdown",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -9,16 +9,15 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@kaelen/editor-runtime": "workspace:*",
     "@kaelen/editor-schema": "workspace:*",
     "@kaelen/editor-shared-types": "workspace:*",
-    "prosemirror-model": "^1.25.11",
-    "prosemirror-state": "^1.4.4",
-    "prosemirror-tables": "^1.8.5"
+    "markdown-it": "^15.0.0"
   },
   "devDependencies": {
     "@kaelen/editor-api": "workspace:*",
-    "@kaelen/editor-pm-adapter": "workspace:*",
-    "jsdom": "^26.1.0"
+    "@kaelen/editor-plugin-color": "workspace:*",
+    "@kaelen/editor-plugin-image": "workspace:*",
+    "@kaelen/editor-plugin-link": "workspace:*",
+    "@kaelen/editor-plugin-table": "workspace:*"
   }
 }

@@ -18,7 +18,7 @@
 
 | 状态 | 切片 |
 | --- | --- |
-| 已合并 | S1–S23，含补记的 S19.5（文字颜色与背景色，实际早于 S19 合入）。S12 的演示服务与可替换服务契约位于 `apps/remote-image-service` 和 `packages/editor-remote-image-service`。S13 的 y-prosemirror 前置验证已记录在 `docs/y-prosemirror-compatibility.md`。 |
+| 已合并 | S1–S24，含补记的 S19.5（文字颜色与背景色，实际早于 S19 合入）。S12 的演示服务与可替换服务契约位于 `apps/remote-image-service` 和 `packages/editor-remote-image-service`。S13 的 y-prosemirror 前置验证已记录在 `docs/y-prosemirror-compatibility.md`。 |
 | 待决策 | 无。 |
 
 S17 的已交付范围是基准文档、六项 Node/jsdom 测量、`getDocument()` 快照缓存和 CI 门禁。字数统计随 S23 补上了自己的测量（`wordCountMs`）；NodeView 懒挂载尚无对应的 NodeView，后续在引入该能力时单独实现和测量。
@@ -27,7 +27,6 @@ S17 的已交付范围是基准文档、六项 Node/jsdom 测量、`getDocument(
 
 | 欠账 | 方案条目 |
 | --- | --- |
-| Markdown 导入导出 | §4.3 |
 | 真实浏览器自动化：组合态 CDP 用例、粘贴解析阶段零网络请求断言 | §16.3、§16.4、S7/S9 的验证栏 |
 | 公开 API 表面快照纳入 CI、样例插件一致性测试、包间依赖方向 lint | §16.5 |
 | 性能预算按真实 CI 历史与业务样本校准 | §14 |
@@ -311,6 +310,19 @@ graph TD
 - **依赖**：S1、S17（本片自带一项基准）。
 - **PRD**：§4.4、§14.1、§16.4
 
+### S24. Markdown 导入导出 · AFK
+
+- **动什么**：`CoreNodeSpec` / `CoreMarkSpec` 增加 `toMarkdown`（纯函数，同 `toDOM`）与 `fromMarkdown`（声明式规则，同 `parseDOM`）；冻结核心集与 link / table / image 插件各自补上自己的映射；`documentToMarkdown` 落在 `editor-schema`；`markdownToDocument` 与它的 CommonMark 解析器落在新包 `editor-markdown`；`getMarkdown()` 与 `getSchemaExtensions()` 进 `RichEditor`；`pnpm render --format markdown`；playground 加导入导出面板。
+- **为什么两个方向不在同一个包**：导出只是字符串拼接，约束与 HTML 渲染完全相同（无 DOM、前后端共用），因此和 `renderDocumentToHTML` 放在一起；导入需要一个 CommonMark 解析器，那是这一片唯一的外部运行时依赖。分开之后，只导出的宿主不为解析器付出体积——与"没设置对齐时不多写一个属性"是同一条取舍。
+- **为什么映射挂在节点定义上而不是集中在 Markdown 包里**：集中写就意味着新增一个节点要改两个包，而漏改的那一个不会有任何报错——`getHTML()` 有的表达，`getMarkdown()` 会静悄悄地没有。挂在 spec 上还顺带让第三方插件不改 Core 就有 Markdown 支持（§16.5）。
+- **降级边界**：见方案 §4.3 的两张表。一句话是丢格式不丢文字，与 §9.3 缺插件时同一条立场；导入侧多两条安全规则——裸 HTML 按纯文本收下（解析器 `html: false`），图片降级为链接（§11.3.1 禁止热链）。
+- **演示**：playground 底部"Markdown 导入导出"面板，导出当前文档、就地改、再导入；`pnpm render fixtures/doc-full.json --format markdown`。
+- **验证**：序列化与转义的纯函数单测；解析与安全边界单测（`javascript:` 与 `ftp:` 两道协议拦截各一例、裸 HTML 变文字、图片变链接）；**doc → Markdown → doc 的全结构 round-trip 全等**，外加"往返两次导出字节相同"；`toMarkdown` 纳入 `toDOM` 那条禁 DOM 的静态检查并各配一个反例 fixture；服务端导出与 CLI 输出一致。
+- **代价**：`editor-markdown` 引入 `markdown-it`（本仓库第一个非 ProseMirror 的运行时依赖）。选它而不是自己写 CommonMark：解析器的边界情况是无底洞，而 Markdown 只是交换格式，不值得为它养一个解析器。
+- **回滚**：单 commit；回滚后导入导出能力消失，文档不受影响——Markdown 从不参与存储。
+- **依赖**：S6（块结构）、S10（表格）、S11（图片）、S22（代码块语言）。
+- **PRD**：§4.3、§7.1、§12.1
+
 ## 4. 不可回滚边界
 
 以下内容一旦有**真实用户文档落库**就不可回滚，必须在接入任何真实业务数据之前做完做对：
@@ -337,7 +349,7 @@ graph TD
 | 方案 §17 阶段 | 切片 |
 | --- | --- |
 | M1 内核与不可逆决策 | S1 – S8、S14 |
-| M2 内容能力与第二框架 | S9 – S13、S15、S18 – S20、S22、S23 |
+| M2 内容能力与第二框架 | S9 – S13、S15、S18 – S20、S22 – S24 |
 | M3 平台化 | S5（可提前）、S16、S17、S21 |
 | M4 高级能力 | 本清单不覆盖；以 S14 的 patch 流与 S1 的 `annotations` 字段为入口 |
 

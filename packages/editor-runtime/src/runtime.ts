@@ -9,7 +9,9 @@ import {
   cloneJson,
   countText,
   createEmptyEnvelope,
+  documentToMarkdown,
   migrateEnvelope,
+  type RenderSchema,
   renderDocumentToHTML,
   validateEnvelope,
 } from "@kaelen/editor-schema";
@@ -49,6 +51,16 @@ export interface Runtime {
   getTextStats(): DocumentTextStats;
   /** 从当前结构化文档生成 HTML；与服务端共用纯 JS renderer。 */
   getHTML(): string;
+  /** 从当前结构化文档生成 Markdown。同样是纯 JS，服务端可直接调用。 */
+  getMarkdown(): string;
+  /**
+   * 已启用插件贡献的节点/标记规格。
+   *
+   * 给的是"外部序列化器需要的那张扩展表"，与 `renderDocumentToHTML` 的第二个
+   * 参数同一形状。Markdown 导入要靠它才知道 `co_table` 一类的结构长什么样，
+   * 而解析器是可选依赖，不该被塞进 runtime——宿主自己把两者接起来。
+   */
+  getSchemaExtensions(): RenderSchema;
   execute(command: string, input?: unknown): CommandResult;
   queryCommand(command: string, input?: unknown): CommandQuery;
   getMode(): EditorMode;
@@ -313,6 +325,19 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
         nodes: resolution.nodes,
         marks: resolution.marks,
       });
+    },
+
+    getMarkdown(): string {
+      return documentToMarkdown(session.docJSON, {
+        nodes: resolution.nodes,
+        marks: resolution.marks,
+      });
+    },
+
+    // 拷一层再交出去：插件规格是启动时定死的内部状态，宿主拿到的应该是一张
+    // 只读的表，不是能往里塞节点的注册中心。
+    getSchemaExtensions(): RenderSchema {
+      return { nodes: { ...resolution.nodes }, marks: { ...resolution.marks } };
     },
 
     execute(command: string, input?: unknown): CommandResult {

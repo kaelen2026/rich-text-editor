@@ -1449,6 +1449,28 @@ div.co-unknown {
   margin-block-end: 0;
 }
 
+/* Markdown 草稿区：与 pre 同一套等宽外观，但可编辑——导入的入口就是它。 */
+.markdown-draft {
+  inline-size: 100%;
+  margin: 0 0 var(--s3);
+  padding: var(--s3);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+  color: inherit;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.console-body ul {
+  margin: 0;
+  padding-inline-start: var(--s4);
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
 /* ── 可达性基线 ───────────────────────────────────────── */
 
 :focus-visible {

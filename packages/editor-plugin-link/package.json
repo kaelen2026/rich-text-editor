@@ -9,7 +9,8 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@kaelen/editor-runtime": "workspace:*"
+    "@kaelen/editor-runtime": "workspace:*",
+    "@kaelen/editor-schema": "workspace:*"
   },
   "devDependencies": {
     "@kaelen/editor-api": "workspace:*",
