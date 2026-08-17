@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as Y from "yjs";
-import { collectSharedNames } from "./inspect";
+import { collectSharedNames, collectUpdateNames } from "./inspect";
 
 /** 手搓共享片段，避免这份测试反过来依赖 y-prosemirror 的编码细节。 */
 function fragmentWith(build: (fragment: Y.XmlFragment) => void): Y.XmlFragment {
@@ -41,5 +41,29 @@ describe("共享文档的名字扫描", () => {
 
   it("空片段没有任何名字", () => {
     expect(collectSharedNames(fragmentWith(() => {}))).toEqual({ nodes: [], marks: [] });
+  });
+});
+
+describe("尚未应用的更新里的名字", () => {
+  it("从更新字节里读出节点名与标记名，不必先应用它", () => {
+    const doc = new Y.Doc();
+    const fragment = doc.getXmlFragment("prosemirror");
+    const table = new Y.XmlElement("co_table");
+    const text = new Y.XmlText();
+    text.applyDelta([{ insert: "格子", attributes: { co_text_color: { value: "#ff0000" } } }]);
+    table.insert(0, [text]);
+    fragment.insert(0, [new Y.XmlElement("paragraph"), table]);
+
+    const names = collectUpdateNames(Y.encodeStateAsUpdate(doc));
+
+    expect(names.nodes).toEqual(["paragraph", "co_table"]);
+    expect(names.marks).toEqual(["co_text_color"]);
+  });
+
+  it("只有文本的更新没有节点名", () => {
+    const doc = new Y.Doc();
+    doc.getText("body").insert(0, "纯文本");
+
+    expect(collectUpdateNames(Y.encodeStateAsUpdate(doc))).toEqual({ nodes: [], marks: [] });
   });
 });

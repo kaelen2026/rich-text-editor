@@ -1,5 +1,7 @@
 import type { BlockAlign } from "@kaelen/editor-schema";
 import {
+  type CollabRejection,
+  type CollabState,
   DOCUMENT_NODE_LIMIT,
   type DocumentLimitNotice,
   type EditorMode,
@@ -23,8 +25,9 @@ import {
   type ClipboardPayloadMeta,
   createClipboardPlugin,
 } from "./clipboard";
+import { COLLAB_DISABLED, CollabBinding, type CollabSessionOptions } from "./collab";
 import { countNodes, insertedNodeCount } from "./document-limits";
-import { editorPlugins } from "./plugins";
+import { editorPlugins, historyCommandsFor } from "./plugins";
 import { restoreDoc, sanitizeDoc } from "./unknown";
 
 /** 状态变化通知。`docChanged` 区分内容变更与仅选区变更。 */
@@ -86,6 +89,7 @@ export class EditorSession {
   private nodeCountBound = 0;
   /** 最近一次 dispatch 是否被规模上限挡下，供 `applyCommand` 如实回报给宿主。 */
   private lastDispatchRejected = false;
+  private readonly collab: CollabBinding | undefined;
 
   constructor(
     private readonly schema: Schema,
@@ -101,16 +105,16 @@ export class EditorSession {
     private readonly extensions: readonly SessionExtension[] = [],
     private readonly onClipboardNotice: (notice: ClipboardNotice) => void = () => {},
     private readonly onLimitExceeded: (notice: DocumentLimitNotice) => void = () => {},
+    collab?: CollabSessionOptions,
+    private readonly onCollabChange: (state: CollabState) => void = () => {},
+    private readonly onCollabRejected: (rejection: CollabRejection) => void = () => {},
   ) {
     this.mode = mode;
+    this.collab = collab ? new CollabBinding(collab) : undefined;
     this.state = EditorState.create({
       schema,
       doc: ProseMirrorNode.fromJSON(schema, sanitizeDoc(schema, doc).doc),
-      plugins: [
-        ...editorPlugins(schema, () => this.isComposing),
-        ...this.extensionPlugins(),
-        createClipboardPlugin({ getPayloadMeta: clipboardMeta, onNotice: onClipboardNotice }),
-      ],
+      plugins: this.buildPlugins(),
     });
     this.nodeCountBound = countNodes(this.state.doc);
     for (const extension of this.extensions) {
@@ -120,12 +124,63 @@ export class EditorSession {
         dispatch: (transaction) => this.dispatch(transaction),
       });
     }
+    // 绑定要在状态建好之后再接：闸门一旦当场放行就会回调 reconfigure。
+    this.collab?.attach(this.schema, {
+      reconfigure: () => this.reconfigurePlugins(),
+      changed: () => this.onCollabChange(this.collabState),
+      rejected: (rejection) => this.onCollabRejected(rejection),
+    });
+  }
+
+  /**
+   * 插件表。三处装配（构造、装载新文档、协同绑定变化）共用同一份，
+   * 少了它，"协同下不装 prosemirror-history"这类规则很容易只在其中一处成立。
+   */
+  private buildPlugins(): Plugin[] {
+    return [
+      ...editorPlugins(this.schema, () => this.isComposing, this.collab?.bound === true),
+      // 协同的远端光标同样是覆盖文本的 Decoration，必须一起走冻结包装：
+      // 组合期间重算它会让 ProseMirror 重建那段 DOM，候选文本随即消失。
+      ...(this.collab?.plugins() ?? []).map((plugin) => this.freezeComposingDecorations(plugin)),
+      ...this.extensionPlugins(),
+      createClipboardPlugin({
+        getPayloadMeta: this.clipboardMeta,
+        onNotice: this.onClipboardNotice,
+      }),
+    ];
+  }
+
+  /**
+   * 装上或卸下协同插件。用 `reconfigure` 而不是重建状态：文档、选区和本地
+   * 历史都留着，用户不会因为连上协作而丢掉正在编辑的位置。
+   */
+  private reconfigurePlugins(): void {
+    this.state = this.state.reconfigure({ plugins: this.buildPlugins() });
+    this.view?.updateState(this.state);
+    this.onChange(false);
   }
 
   private extensionPlugins(): readonly Plugin[] {
     return this.extensions
       .flatMap((extension) => extension.plugins(this.schema))
       .map((plugin) => this.freezeComposingDecorations(plugin));
+  }
+
+  get collabState(): CollabState {
+    return this.collab?.state ?? COLLAB_DISABLED;
+  }
+
+  /** 协同已绑定共享文档：此时装载本地文档会覆盖所有协作者的内容。 */
+  get collabBound(): boolean {
+    return this.collab?.bound === true;
+  }
+
+  /**
+   * 撤销/重做。实现随协同状态切换：单机走 `prosemirror-history`，协同下走
+   * `Y.UndoManager`——后者只回退自己的改动，前者会把别人的一起退掉。
+   */
+  applyHistoryCommand(kind: "undo" | "redo", apply: boolean): boolean {
+    return this.applyCommand(historyCommandsFor(this.collabBound)[kind], apply);
   }
 
   /**
@@ -329,6 +384,7 @@ export class EditorSession {
     this.flushScheduled = false;
     this.pendingTransactions.length = 0;
     this.isComposing = false;
+    this.collab?.destroy();
     for (const extension of this.extensions) {
       extension.destroy?.();
     }
@@ -347,14 +403,7 @@ export class EditorSession {
     this.state = EditorState.create({
       schema: this.schema,
       doc: ProseMirrorNode.fromJSON(this.schema, sanitized),
-      plugins: [
-        ...editorPlugins(this.schema, () => this.isComposing),
-        ...this.extensionPlugins(),
-        createClipboardPlugin({
-          getPayloadMeta: this.clipboardMeta,
-          onNotice: this.onClipboardNotice,
-        }),
-      ],
+      plugins: this.buildPlugins(),
     });
     this.view?.updateState(this.state);
     // 装载不受节点上限约束：已经超限的历史文档必须打得开，随后的插入才受限。
@@ -508,6 +557,7 @@ export class EditorSession {
         this.compositionTimer = undefined;
       }
     }
+    this.collab?.setComposing(composing);
     this.onCompositionChange(composing);
     if (!composing) {
       this.scheduleFlush();

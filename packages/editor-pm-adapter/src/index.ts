@@ -12,6 +12,14 @@ export {
   type SliceJSON,
   serializeSlice,
 } from "./clipboard";
+export {
+  COLLAB_DISABLED,
+  CollabBinding,
+  type CollabBindingHooks,
+  type CollabSessionOptions,
+  collabHistoryCommands,
+  type HistoryCommands,
+} from "./collab";
 export { coreCommands, type SessionCommand } from "./commands";
 export { countNodes, insertedNodeCount } from "./document-limits";
 export {

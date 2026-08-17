@@ -6,7 +6,6 @@ import {
 } from "@kaelen/editor-schema";
 import type { CommandResult } from "@kaelen/editor-shared-types";
 import { selectAll, toggleMark } from "prosemirror-commands";
-import { redo, undo } from "prosemirror-history";
 import {
   indentListItem,
   insertHardBreak,
@@ -139,12 +138,13 @@ export const coreCommands: Record<string, SessionCommand> = {
     // 只读态可选中可复制，全选因此仍然可用（方案 §4.1）。
     readOnly: true,
   },
+  // 撤销的实现随协同状态切换（协同下是 Y.UndoManager），命令名与语义不变。
   "history.undo": {
-    run: (session, apply) => commandResult(session.applyCommand(undo, apply)),
+    run: (session, apply) => commandResult(session.applyHistoryCommand("undo", apply)),
     active: () => false,
   },
   "history.redo": {
-    run: (session, apply) => commandResult(session.applyCommand(redo, apply)),
+    run: (session, apply) => commandResult(session.applyHistoryCommand("redo", apply)),
     active: () => false,
   },
 };

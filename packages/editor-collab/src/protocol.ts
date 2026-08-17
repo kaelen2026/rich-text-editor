@@ -1,8 +1,9 @@
 import * as decoding from "lib0/decoding";
 import * as encoding from "lib0/encoding";
 import { type Awareness, applyAwarenessUpdate, encodeAwarenessUpdate } from "y-protocols/awareness";
-import { readSyncMessage, writeSyncStep1, writeSyncStep2, writeUpdate } from "y-protocols/sync";
-import type * as Y from "yjs";
+import { writeSyncStep1, writeSyncStep2, writeUpdate } from "y-protocols/sync";
+import * as Y from "yjs";
+import { collectUpdateNames, type SharedDocumentNames } from "./inspect";
 
 /**
  * 线上消息格式。
@@ -16,6 +17,11 @@ import type * as Y from "yjs";
  */
 export const MESSAGE_SYNC = 0;
 export const MESSAGE_AWARENESS = 1;
+
+/** `y-protocols/sync` 的同步子类型。分发在本文件里手写，见 `applyMessage`。 */
+const SYNC_STEP1 = 0;
+const SYNC_STEP2 = 1;
+const SYNC_UPDATE = 2;
 
 /** 一端持有的协同状态。客户端与服务端房间是同一个形状。 */
 export interface CollabEndpoint {
@@ -55,12 +61,26 @@ export function encodeAwareness(awareness: Awareness, clients: number[]): Uint8A
   return encoding.toUint8Array(encoder);
 }
 
-/** `applyMessage` 的结果：需要回给对端的字节，以及这条消息是不是同步应答。 */
+/**
+ * 入站更新的准入判断。返回 false 的更新一律不会被写进文档。
+ *
+ * 存在的理由见 `collectUpdateNames`：本端 Schema 不认识的名字一旦进了 Y.Doc，
+ * y-prosemirror 会替所有人把那段内容删掉。因此判断只能发生在应用之前。
+ */
+export type CollabInboundFilter = (names: SharedDocumentNames) => boolean;
+
+/** `applyMessage` 的结果。 */
 export interface AppliedMessage {
   /** 有内容时必须原样发回给来源那一端。 */
   reply?: Uint8Array;
   /** 收到的是 syncStep2 或 update，也就是文档内容真的到了。 */
   documentApplied: boolean;
+  /** 更新被准入判断挡下，文档一字未动。带上它引入的名字，供上报。 */
+  rejected?: SharedDocumentNames;
+}
+
+export interface ApplyMessageOptions {
+  accept?: CollabInboundFilter;
 }
 
 /**
@@ -69,13 +89,18 @@ export interface AppliedMessage {
  * `origin` 会成为 Yjs 事务的 origin，本端据此区分"自己改的"和"远端来的"——
  * 少了它，把远端更新写进本地文档会立刻被当成本地改动再广播一次，两端来回弹。
  *
- * 畸形消息会抛错（`y-protocols` 对未知的同步子类型直接抛）。这里刻意不吞：
- * 消息来自网络对端，是否要因此断开那一条连接是调用方的策略，不是编解码的。
+ * 同步子类型在这里手写分发，而不是交给 `y-protocols` 的 `readSyncMessage`：
+ * 准入判断必须插在"取出更新字节"和"应用它"之间，而那个函数把两步焊死了。
+ * 编码仍然全部走 y-protocols，线上格式与任何现成实现一致。
+ *
+ * 畸形消息会抛错。这里刻意不吞：消息来自网络对端，是否要因此断开那一条连接
+ * 是调用方的策略，不是编解码的。
  */
 export function applyMessage(
   message: Uint8Array,
   endpoint: CollabEndpoint,
   origin: unknown,
+  options: ApplyMessageOptions = {},
 ): AppliedMessage {
   const decoder = decoding.createDecoder(message);
   const type = decoding.readVarUint(decoder);
@@ -87,10 +112,26 @@ export function applyMessage(
     // 未知消息类型直接忽略：协议要能往前加类型，旧端不该因此断开。
     return { documentApplied: false };
   }
-  const encoder = encoding.createEncoder();
-  encoding.writeVarUint(encoder, MESSAGE_SYNC);
-  const syncType = readSyncMessage(decoder, encoder, endpoint.doc, origin);
-  // readSyncMessage 只在收到 step1 时往 encoder 里写应答；其余情况只有那个类型字节。
-  const reply = encoding.length(encoder) > 1 ? encoding.toUint8Array(encoder) : undefined;
-  return { reply, documentApplied: syncType !== 0 };
+
+  const syncType = decoding.readVarUint(decoder);
+  if (syncType === SYNC_STEP1) {
+    const encoder = encoding.createEncoder();
+    encoding.writeVarUint(encoder, MESSAGE_SYNC);
+    writeSyncStep2(encoder, endpoint.doc, decoding.readVarUint8Array(decoder));
+    return { reply: encoding.toUint8Array(encoder), documentApplied: false };
+  }
+  if (syncType !== SYNC_STEP2 && syncType !== SYNC_UPDATE) {
+    throw new Error(`未知的同步消息类型：${syncType}`);
+  }
+
+  const update = decoding.readVarUint8Array(decoder);
+  if (options.accept) {
+    // 只有装了准入判断才解更新结构：没装的一端（例如中继房间）不为它付出解码成本。
+    const names = collectUpdateNames(update);
+    if (!options.accept(names)) {
+      return { documentApplied: false, rejected: names };
+    }
+  }
+  Y.applyUpdate(endpoint.doc, update, origin);
+  return { documentApplied: true };
 }

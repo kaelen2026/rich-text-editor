@@ -1,6 +1,7 @@
 import type { CollabPeer, CollabPeerIdentity, CollabStatus } from "@kaelen/editor-shared-types";
 import type { Awareness } from "y-protocols/awareness";
 import type * as Y from "yjs";
+import type { CollabInboundFilter } from "./protocol";
 
 /**
  * 协同 provider 契约（方案 §17）。
@@ -34,6 +35,15 @@ export interface CollabProvider {
 
   /** 设置本端在别人光标上显示的名字与颜色。 */
   setLocalPeer(identity: CollabPeerIdentity): void;
+
+  /**
+   * 装上入站准入判断，`null` 卸下。
+   *
+   * 判断由适配层提供——只有它认识文档 Schema。provider 只负责在**写进 Y.Doc 之前**
+   * 问一句：这笔更新引入的节点名和标记名，本端认得吗？认不得就整条不应用。晚一步
+   * 就来不及了，理由见 `collectUpdateNames`。
+   */
+  setInboundFilter(filter: CollabInboundFilter | null): void;
 
   /**
    * 暂停/恢复入站更新。

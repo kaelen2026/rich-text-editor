@@ -1,7 +1,13 @@
 import type { CollabPeer, CollabPeerIdentity, CollabStatus } from "@kaelen/editor-shared-types";
 import { Awareness, removeAwarenessStates } from "y-protocols/awareness";
 import * as Y from "yjs";
-import { applyMessage, encodeAwareness, encodeDocumentUpdate, encodeSyncStep1 } from "./protocol";
+import {
+  applyMessage,
+  type CollabInboundFilter,
+  encodeAwareness,
+  encodeDocumentUpdate,
+  encodeSyncStep1,
+} from "./protocol";
 import {
   type CollabConnector,
   type CollabProvider,
@@ -50,6 +56,7 @@ export function createCollabClient(options: CollabClientOptions): CollabProvider
   let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
   let paused = false;
   let opening = false;
+  let inboundFilter: CollabInboundFilter | null = null;
   const inbox: Uint8Array[] = [];
   /**
    * 连接刚建立、`socket` 还没赋值时要发的字节。
@@ -95,7 +102,9 @@ export function createCollabClient(options: CollabClientOptions): CollabProvider
   const deliver = (message: Uint8Array): void => {
     let applied: ReturnType<typeof applyMessage>;
     try {
-      applied = applyMessage(message, { doc, awareness }, NETWORK);
+      applied = applyMessage(message, { doc, awareness }, NETWORK, {
+        accept: inboundFilter ?? undefined,
+      });
     } catch {
       // 畸形消息只丢这一条。断开重连解决不了格式问题，反而会把整条会话拖垮。
       return;
@@ -249,6 +258,10 @@ export function createCollabClient(options: CollabClientOptions): CollabProvider
       awareness.destroy();
       statusListeners.clear();
       peerListeners.clear();
+    },
+
+    setInboundFilter(filter: CollabInboundFilter | null) {
+      inboundFilter = filter;
     },
 
     setLocalPeer(identity: CollabPeerIdentity) {

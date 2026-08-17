@@ -72,6 +72,13 @@ interface RichEditor {
   /** 宿主完成持久化后调用，清除脏标记且不影响撤销历史。 */
   markSaved(): void;
   getRevision(): number;
+  /**
+   * 协同会话状态（方案 §17）。未配置协同时 `enabled` 为 false。
+   *
+   * `bound` 为 false 时编辑的仍是本地文档：连接中如此，本端 Schema 与共享文档
+   * 不兼容而被拒时也是如此——后者会同时带上 `rejection`，说明缺哪些能力。
+   */
+  getCollabState(): CollabState;
 
   undo(): CommandResult;
   redo(): CommandResult;

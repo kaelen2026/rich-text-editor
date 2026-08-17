@@ -1,5 +1,7 @@
 import {
   buildSchema,
+  COLLAB_DISABLED,
+  type CollabSessionOptions,
   documentPatchFromTransaction,
   EditorSession,
   type SessionCommand,
@@ -17,6 +19,8 @@ import {
 } from "@kaelen/editor-schema";
 import type {
   ClipboardNotice,
+  CollabRejection,
+  CollabState,
   CommandQuery,
   CommandResult,
   DocumentLimitNotice,
@@ -79,6 +83,13 @@ export interface Runtime {
   isDirty(): boolean;
   markSaved(): void;
   getRevision(): number;
+  /**
+   * 协同会话状态。未配置协同时 `enabled` 为 false。
+   *
+   * 引用在状态未变时保持稳定，可直接喂给框架订阅；变化会触发 `change` 与
+   * `collabChanged` 两个事件。
+   */
+  getCollabState(): CollabState;
   undo(): CommandResult;
   redo(): CommandResult;
   mount(element: HTMLElement): void;
@@ -98,6 +109,11 @@ export interface RuntimeOptions {
   mode?: EditorMode;
   /** 增量自动保存：2 秒空闲或 50 个 patch 后提交。 */
   autoSave?: AutoSaveOptions;
+  /**
+   * 协同会话（方案 §17）。传入即启用，provider 由宿主注入——传输是可替换的，
+   * 本仓库的 WebSocket 实现只是其中一种（见 `@kaelen/editor-collab`）。
+   */
+  collab?: CollabSessionOptions;
 }
 
 /** 事件载荷在订阅处收敛为具体类型，这里只需要一个能装下所有监听器的形状。 */
@@ -137,6 +153,9 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       })
     : undefined;
   let pendingPatch: DocumentPatch | undefined;
+  // 必须先于会话声明：闸门当场判定不兼容时，`rejected` 会在会话构造函数里
+  // 同步回调，那时读一个还没进入作用域的 let 会直接抛。
+  let collabState: CollabState = COLLAB_DISABLED;
 
   function emit<TEvent extends EditorEventName>(
     event: TEvent,
@@ -205,7 +224,17 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
     sessionExtensions,
     (notice: ClipboardNotice) => emit("clipboardNotice", notice),
     (notice: DocumentLimitNotice) => emit("limitExceeded", notice),
+    options.collab,
+    (state: CollabState) => {
+      collabState = state;
+      // 协同状态不只是提示：连接状态、在线协作者、被拒都会改变工具栏能做什么，
+      // 因此同时走通用的 change，宿主不必为它单独订阅一次。
+      invalidate();
+      emit("collabChanged", state);
+    },
+    (rejection: CollabRejection) => emit("collabRejected", rejection),
   );
+  collabState = session.collabState;
 
   /**
    * 三态对命令的门禁：禁用态一律拒绝，只读态只放行不改文档的命令。
@@ -235,6 +264,18 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
 
   return {
     loadDocument(input: EditorEnvelope | NodeJSON): LoadResult {
+      if (session.collabBound) {
+        // 共享文档才是事实来源。在这里装载会把本地这份内容写进 Y.Doc，
+        // 也就是替所有协作者把文档换掉——比"装不上"严重得多。
+        return {
+          ok: false,
+          migrated: false,
+          degraded: false,
+          unknownNodes: [],
+          unknownMarks: [],
+          errors: ["协同已绑定共享文档，装载本地文档会覆盖所有协作者的内容"],
+        };
+      }
       const migration = migrateEnvelope(input, migrations);
       if (!migration.ok) {
         return {
@@ -469,6 +510,10 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
 
     getRevision(): number {
       return revision;
+    },
+
+    getCollabState(): CollabState {
+      return collabState;
     },
 
     undo(): CommandResult {

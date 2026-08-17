@@ -1,9 +1,15 @@
 export { type CollabClientOptions, createCollabClient } from "./client";
-export { collectSharedNames, type SharedDocumentNames } from "./inspect";
+export {
+  collectSharedNames,
+  collectUpdateNames,
+  type SharedDocumentNames,
+} from "./inspect";
 export {
   type AppliedMessage,
+  type ApplyMessageOptions,
   applyMessage,
   type CollabEndpoint,
+  type CollabInboundFilter,
   encodeAwareness,
   encodeDocumentUpdate,
   encodeSyncStep1,

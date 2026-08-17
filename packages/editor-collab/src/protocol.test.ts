@@ -102,3 +102,39 @@ describe("协同线上协议", () => {
     expect(() => applyMessage(new Uint8Array([0, 9]), target, "source")).toThrow();
   });
 });
+
+describe("入站准入判断", () => {
+  it("被拒的更新一字不落进文档", () => {
+    const source = endpoint();
+    const target = endpoint();
+    const fragment = source.doc.getXmlFragment("prosemirror");
+    fragment.insert(0, [new Y.XmlElement("co_table")]);
+
+    const applied = applyMessage(
+      encodeDocumentUpdate(Y.encodeStateAsUpdate(source.doc)),
+      target,
+      "source",
+      { accept: (names) => !names.nodes.includes("co_table") },
+    );
+
+    expect(applied.documentApplied).toBe(false);
+    expect(applied.rejected?.nodes).toEqual(["co_table"]);
+    expect(target.doc.getXmlFragment("prosemirror").length).toBe(0);
+  });
+
+  it("认得的名字照常放行", () => {
+    const source = endpoint();
+    const target = endpoint();
+    source.doc.getXmlFragment("prosemirror").insert(0, [new Y.XmlElement("paragraph")]);
+
+    const applied = applyMessage(
+      encodeDocumentUpdate(Y.encodeStateAsUpdate(source.doc)),
+      target,
+      "source",
+      { accept: () => true },
+    );
+
+    expect(applied.documentApplied).toBe(true);
+    expect(target.doc.getXmlFragment("prosemirror").length).toBe(1);
+  });
+});
