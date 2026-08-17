@@ -16,6 +16,7 @@ import type {
   ClipboardNotice,
   CommandQuery,
   CommandResult,
+  DocumentLimitNotice,
   DocumentMigration,
   DocumentPatch,
   EditorEnvelope,
@@ -35,6 +36,11 @@ import { describeError, type EditorPlugin, resolvePlugins } from "./plugins";
 export interface Runtime {
   loadDocument(input: EditorEnvelope | NodeJSON): LoadResult;
   getDocument(): EditorEnvelope;
+  /**
+   * 当前信封序列化后的 UTF-8 字节数。宿主在全量保存前据此执行 §14.2 的 2MB
+   * 上限：保存是宿主的动作，编辑器只提供可判定的事实。
+   */
+  getDocumentSize(): number;
   /** 从当前结构化文档生成 HTML；与服务端共用纯 JS renderer。 */
   getHTML(): string;
   execute(command: string, input?: unknown): CommandResult;
@@ -98,6 +104,8 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
   let destroyed = false;
   let snapshot: EditorSnapshot | null = null;
   let documentSnapshot: EditorEnvelope | null = null;
+  let documentProxy: EditorEnvelope | null = null;
+  let documentSize: number | null = null;
   // 启动期的冲突发生在宿主订阅之前，只能靠 getPluginErrors 取回。
   let pluginErrors: readonly PluginError[] = Object.freeze([...resolution.errors]);
   const listeners = new Map<EditorEventName, Set<AnyListener>>();
@@ -124,6 +132,8 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
     stateRevision += 1;
     snapshot = null;
     documentSnapshot = null;
+    documentProxy = null;
+    documentSize = null;
     emit("change", undefined);
   }
 
@@ -174,12 +184,24 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
     },
     sessionExtensions,
     (notice: ClipboardNotice) => emit("clipboardNotice", notice),
+    (notice: DocumentLimitNotice) => emit("limitExceeded", notice),
   );
 
   /**
    * 三态对命令的门禁：禁用态一律拒绝，只读态只放行不改文档的命令。
    * 门禁放在 runtime 而不是每条命令里，插件命令因此自动受同一条规则约束。
    */
+  /** 当前信封的真实对象，同一事务内复用；`getDocument` 与大小计算共享它。 */
+  function currentEnvelope(): EditorEnvelope {
+    documentSnapshot ??= {
+      ...meta,
+      plugins: { ...meta.plugins },
+      annotations: cloneJson(meta.annotations),
+      doc: session.docJSON,
+    };
+    return documentSnapshot;
+  }
+
   function modeRejection(command: SessionCommand): CommandResult | null {
     const mode = session.currentMode;
     if (mode === "disabled") {
@@ -256,13 +278,17 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
     getDocument(): EditorEnvelope {
       // 同一事务只构造一次快照，避免保存面板、工具栏等订阅者反复序列化全文。
       // 用只读 Proxy 保持调用方隔离，同时让同一事务中的引用稳定。
-      documentSnapshot ??= readOnlySnapshot({
-        ...meta,
-        plugins: { ...meta.plugins },
-        annotations: cloneJson(meta.annotations),
-        doc: session.docJSON,
-      });
-      return documentSnapshot;
+      documentProxy ??= readOnlySnapshot(currentEnvelope());
+      return documentProxy;
+    },
+
+    /**
+     * 序列化真实对象而不是 `getDocument()` 的只读 Proxy：后者会为遍历到的
+     * 每个子对象再包一层代理，量到的字节数一样，代价却不一样。
+     */
+    getDocumentSize(): number {
+      documentSize ??= utf8ByteLength(JSON.stringify(currentEnvelope()));
+      return documentSize;
     },
 
     getHTML(): string {
@@ -449,6 +475,11 @@ function toMeta(envelope: EditorEnvelope): EnvelopeMeta {
     // 深拷贝：批注对象与 payload 都是调用方的，浅拷数组挡不住后续改写。
     annotations: cloneJson(envelope.annotations),
   };
+}
+
+/** UTF-8 字节数。上限是存储契约，按字节而不是按字符——CJK 一个字三字节。 */
+function utf8ByteLength(value: string): number {
+  return new TextEncoder().encode(value).length;
 }
 
 /** JSON 快照应可读取、可序列化，但不能通过返回引用回写编辑器内部状态。 */

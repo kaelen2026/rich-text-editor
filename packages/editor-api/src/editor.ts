@@ -27,6 +27,11 @@ export interface RichEditor {
    */
   loadDocument(input: EditorEnvelope | NodeJSON): LoadResult;
   getDocument(): EditorEnvelope;
+  /**
+   * 当前信封序列化后的 UTF-8 字节数。全量保存前必须据此执行 `DOCUMENT_JSON_LIMIT_BYTES`
+   * 上限（方案 §14.2）——保存是宿主的动作，编辑器只提供可判定的事实。
+   */
+  getDocumentSize(): number;
   /** 从当前结构化文档渲染 HTML；可在 Node 服务端直接调用。 */
   getHTML(): string;
 
@@ -78,6 +83,7 @@ export function createEditor(options: EditorOptions = {}): RichEditor {
   return {
     loadDocument: (input) => runtime.loadDocument(input),
     getDocument: () => runtime.getDocument(),
+    getDocumentSize: () => runtime.getDocumentSize(),
     getHTML: () => runtime.getHTML(),
     execute: (command, input) => runtime.execute(command, input),
     queryCommand: (command, input) => runtime.queryCommand(command, input),

@@ -13,6 +13,7 @@ export {
   serializeSlice,
 } from "./clipboard";
 export { coreCommands, type SessionCommand } from "./commands";
+export { countNodes, insertedNodeCount } from "./document-limits";
 export {
   applyDocumentPatch,
   documentPatchFromTransaction,

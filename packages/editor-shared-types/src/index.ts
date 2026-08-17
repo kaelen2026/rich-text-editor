@@ -166,6 +166,28 @@ export interface PluginError {
   message: string;
 }
 
+/**
+ * 文档规模硬上限（方案 §14.2）。两条上限的执行点刻意不同：
+ *
+ * - 节点数由会话在唯一事务入口把关，任何来源的插入都受同一条规则约束；
+ * - 字节数由宿主在保存前用 `getDocumentSize()` 把关——保存是宿主的动作，
+ *   编辑器无从代它拒绝，只能给出可判定的事实。
+ *
+ * 两者都只拦"新写入"，不拦装载：已经超限的历史文档必须打得开，否则超限
+ * 本身就成了丢内容的方式。
+ */
+export const DOCUMENT_NODE_LIMIT = 20_000;
+export const DOCUMENT_JSON_LIMIT_BYTES = 2 * 1024 * 1024;
+
+/** 文档规模超限被拒绝时发给宿主的可展示提示。 */
+export interface DocumentLimitNotice {
+  code: "document-node-limit";
+  limit: number;
+  /** 若不拒绝，文档会达到的规模。 */
+  actual: number;
+  message: string;
+}
+
 /** 剪贴板内容被安全或规模策略拒绝、截断时发给宿主的可展示提示。 */
 export interface ClipboardNotice {
   code: "html-too-large" | "file-limit" | "image-too-large" | "word-file-image" | "table-limit";
@@ -180,6 +202,7 @@ export type EditorEventName =
   | "change"
   | "compositionChanged"
   | "documentDegraded"
+  | "limitExceeded"
   | "patch"
   | "pluginError"
   | "clipboardNotice";
@@ -189,6 +212,8 @@ export interface EditorEventPayload {
   change: undefined;
   compositionChanged: boolean;
   documentDegraded: undefined;
+  /** 一次被规模上限拒绝的写入。文档保持在被拒绝之前的状态。 */
+  limitExceeded: DocumentLimitNotice;
   pluginError: PluginError;
   clipboardNotice: ClipboardNotice;
   /** 每个内容事务一条，可用于增量保存、协同和版本历史。 */

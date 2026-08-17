@@ -1,5 +1,11 @@
 import type { BlockAlign } from "@kaelen/editor-schema";
-import type { EditorMode, NodeJSON, SelectionSnapshot } from "@kaelen/editor-shared-types";
+import {
+  DOCUMENT_NODE_LIMIT,
+  type DocumentLimitNotice,
+  type EditorMode,
+  type NodeJSON,
+  type SelectionSnapshot,
+} from "@kaelen/editor-shared-types";
 import { type MarkType, Node as ProseMirrorNode, type Schema } from "prosemirror-model";
 import { type Command, EditorState, type Plugin, type Transaction } from "prosemirror-state";
 import { Mapping } from "prosemirror-transform";
@@ -10,6 +16,7 @@ import {
   type ClipboardPayloadMeta,
   createClipboardPlugin,
 } from "./clipboard";
+import { countNodes, insertedNodeCount } from "./document-limits";
 import { editorPlugins } from "./plugins";
 import { restoreDoc, sanitizeDoc } from "./unknown";
 
@@ -56,6 +63,10 @@ export class EditorSession {
   private isComposing = false;
   private compositionTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly pendingTransactions: Array<{ transaction: Transaction; mapping: Mapping }> = [];
+  /** 当前文档节点数的保守上界，见 `insertedNodeCount`。 */
+  private nodeCountBound = 0;
+  /** 最近一次 dispatch 是否被规模上限挡下，供 `applyCommand` 如实回报给宿主。 */
+  private lastDispatchRejected = false;
 
   constructor(
     private readonly schema: Schema,
@@ -70,6 +81,7 @@ export class EditorSession {
     private readonly onCompositionChange: (composing: boolean) => void = () => {},
     private readonly extensions: readonly SessionExtension[] = [],
     private readonly onClipboardNotice: (notice: ClipboardNotice) => void = () => {},
+    private readonly onLimitExceeded: (notice: DocumentLimitNotice) => void = () => {},
   ) {
     this.mode = mode;
     this.state = EditorState.create({
@@ -81,6 +93,7 @@ export class EditorSession {
         createClipboardPlugin({ getPayloadMeta: clipboardMeta, onNotice: onClipboardNotice }),
       ],
     });
+    this.nodeCountBound = countNodes(this.state.doc);
     for (const extension of this.extensions) {
       extension.bind?.({
         schema: this.schema,
@@ -264,6 +277,8 @@ export class EditorSession {
       ],
     });
     this.view?.updateState(this.state);
+    // 装载不受节点上限约束：已经超限的历史文档必须打得开，随后的插入才受限。
+    this.nodeCountBound = countNodes(this.state.doc);
     return { unknownNodes, unknownMarks };
   }
 
@@ -275,7 +290,10 @@ export class EditorSession {
     if (!apply) {
       return command(this.state);
     }
-    return command(this.state, (transaction) => this.dispatch(transaction));
+    this.lastDispatchRejected = false;
+    const ran = command(this.state, (transaction) => this.dispatch(transaction));
+    // 命令自认为成功，但事务被规模上限挡下了：对宿主而言这条命令没有生效。
+    return ran && !this.lastDispatchRejected;
   }
 
   /**
@@ -321,15 +339,59 @@ export class EditorSession {
 
   /** 唯一的状态推进入口：无论来自用户输入还是命令，都在这里汇聚并通知。 */
   private applyTransaction(transaction: Transaction): void {
+    const next = this.state.apply(transaction);
+    if (this.exceedsNodeLimit(transaction, next)) {
+      // 事务整体丢弃。视图的 DOM 可能已被用户输入改过，用旧状态刷一次让它回到模型。
+      this.view?.updateState(this.state);
+      return;
+    }
     for (const pending of this.pendingTransactions) {
       pending.mapping.appendMapping(transaction.mapping);
     }
-    this.state = this.state.apply(transaction);
+    this.state = next;
     this.view?.updateState(this.state);
     if (transaction.docChanged) {
       this.onDocumentTransaction(transaction);
     }
     this.onChange(transaction.docChanged);
+  }
+
+  /**
+   * 节点数硬上限（方案 §14.2）。放在事务入口而不是各个插入命令里：打字、粘贴、
+   * 拖入、插件回填走的是同一条路，规则也就只需要一份。
+   *
+   * 常态下不做全文遍历——先用只增的保守上界判断，只有上界触到硬上限时才精确
+   * 重算一次并把上界收回真实值。删除因此不必立刻反映到上界上，代价只是在
+   * 反复增删的文档里偶尔多算一次。
+   */
+  private exceedsNodeLimit(transaction: Transaction, next: EditorState): boolean {
+    if (!transaction.docChanged) {
+      return false;
+    }
+    const inserted = insertedNodeCount(transaction);
+    if (inserted === 0) {
+      return false;
+    }
+    const bound = this.nodeCountBound + inserted;
+    if (bound <= DOCUMENT_NODE_LIMIT) {
+      this.nodeCountBound = bound;
+      return false;
+    }
+    const exact = countNodes(next.doc);
+    this.nodeCountBound = exact;
+    if (exact <= DOCUMENT_NODE_LIMIT) {
+      return false;
+    }
+    // 上界被拒绝的事务撑大了没有意义：文档仍停在被拒绝之前。
+    this.nodeCountBound = countNodes(this.state.doc);
+    this.lastDispatchRejected = true;
+    this.onLimitExceeded({
+      code: "document-node-limit",
+      limit: DOCUMENT_NODE_LIMIT,
+      actual: exact,
+      message: `文档节点数不能超过 ${DOCUMENT_NODE_LIMIT}，本次插入已取消`,
+    });
+    return true;
   }
 
   /** DOM composition 事件与超时兜底都汇到这里，避免重复冲刷队列。 */
