@@ -9,11 +9,11 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@kaelen/editor-runtime": "workspace:*"
+    "@kaelen/editor-runtime": "workspace:*",
+    "@kaelen/editor-shared-types": "workspace:*"
   },
   "devDependencies": {
     "@kaelen/editor-api": "workspace:*",
-    "@kaelen/editor-schema": "workspace:*",
-    "@kaelen/editor-shared-types": "workspace:*"
+    "@kaelen/editor-schema": "workspace:*"
   }
 }

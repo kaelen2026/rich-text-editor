@@ -1,8 +1,16 @@
 #!/usr/bin/env node
+/**
+ * 序列化函数不得触碰 DOM（方案 §7.1、§12.1）。
+ *
+ * 检查 `toDOM` 与 `toMarkdown` 两个属性：约束的理由是同一条——服务端要复用同一份
+ * Schema 产出 HTML 和 Markdown，一个 `document.createElement` 就让整条路径只能在
+ * 浏览器里跑。
+ */
 import { readdirSync, readFileSync } from "node:fs";
 import { extname, join, resolve } from "node:path";
 import ts from "typescript";
 
+const serializerProperties = new Set(["toDOM", "toMarkdown"]);
 const forbiddenGlobals = new Set([
   "document",
   "window",
@@ -39,11 +47,15 @@ function lintToDOMFile(path) {
   );
   const errors = [];
   visit(source, (node) => {
-    if (!ts.isPropertyAssignment(node) || node.name.getText(source) !== "toDOM") return;
+    if (!ts.isPropertyAssignment(node)) return;
+    const property = node.name.getText(source);
+    if (!serializerProperties.has(property)) return;
     visit(node.initializer, (child) => {
       if (!ts.isIdentifier(child) || !forbiddenGlobals.has(child.text)) return;
       const { line, character } = source.getLineAndCharacterOfPosition(child.getStart(source));
-      errors.push(`${path}:${line + 1}:${character + 1} toDOM 不能访问 DOM API: ${child.text}`);
+      errors.push(
+        `${path}:${line + 1}:${character + 1} ${property} 不能访问 DOM API: ${child.text}`,
+      );
     });
   });
   return errors;

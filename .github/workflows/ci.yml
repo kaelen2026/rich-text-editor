@@ -33,6 +33,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # check 里含：序列化函数禁 DOM、包间依赖方向、公开 API 表面快照、Biome。
       - name: Check formatting and lint rules
         run: pnpm check
 
@@ -42,8 +43,32 @@ jobs:
       - name: Run tests
         run: pnpm test
 
+      # 浏览器包每次下载约 95MB。按 lockfile 缓存：Playwright 版本一变，键就变。
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Install Playwright browser
+        run: pnpm exec playwright install --with-deps chromium
+
+      # 只跑 jsdom 验不了的两类：输入法组合态与粘贴解析阶段的网络请求数。
+      - name: Run browser acceptance
+        run: pnpm e2e
+
       - name: Enforce performance budget
-        run: pnpm bench
+        run: pnpm bench --json bench-run.json
+
+      # 归档每次运行的测量值与环境。当前阈值是拍出来的初始值，不是采集来的；
+      # 攒够三次同环境记录后交给 scripts/calibrate-budgets.mjs 反推真实基线（§14）。
+      - name: Archive benchmark record
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-${{ github.run_number }}-${{ github.run_attempt }}
+          path: bench-run.json
+          retention-days: 90
 
       - name: Validate commit messages
         run: pnpm exec commitlint --from "${{ github.event.pull_request.base.sha }}" --to "${{ github.event.pull_request.head.sha }}"

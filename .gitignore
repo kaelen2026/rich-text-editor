@@ -5,3 +5,7 @@ dist/
 .pnpm-debug.log*
 .env
 .env.local
+.claude/worktrees/
+test-results/
+playwright-report/
+blob-report/

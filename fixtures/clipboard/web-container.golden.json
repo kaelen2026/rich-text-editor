@@ -1,0 +1,116 @@
+[
+  {
+    "type": "heading",
+    "attrs": {
+      "level": 2,
+      "align": null
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "季度回顾"
+      }
+    ]
+  },
+  {
+    "type": "paragraph",
+    "attrs": {
+      "align": null
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "本季度"
+      },
+      {
+        "type": "text",
+        "marks": [
+          {
+            "type": "strong"
+          }
+        ],
+        "text": "营收"
+      },
+      {
+        "type": "text",
+        "text": "同比增长，主要来自两条线："
+      }
+    ]
+  },
+  {
+    "type": "bullet_list",
+    "content": [
+      {
+        "type": "list_item",
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "align": null
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "企业版续约率提升"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "list_item",
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {
+              "align": null
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "新市场首单落地"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "type": "paragraph",
+    "attrs": {
+      "align": null
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "图 1：营收曲线"
+      }
+    ]
+  },
+  {
+    "type": "heading",
+    "attrs": {
+      "level": 3,
+      "align": null
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "附注"
+      }
+    ]
+  },
+  {
+    "type": "paragraph",
+    "attrs": {
+      "align": null
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "数据口径见财务说明。"
+      }
+    ]
+  }
+]

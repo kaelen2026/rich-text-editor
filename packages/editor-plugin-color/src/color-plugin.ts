@@ -15,7 +15,13 @@ export const BACKGROUND_COLOR_MARK = "co_background_color";
  */
 const HEX_COLOR = /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/;
 
-/** 前景色与背景色。两个独立标记，因此可以同时生效、各自取消。 */
+/**
+ * 前景色与背景色。两个独立标记，因此可以同时生效、各自取消。
+ *
+ * 两个标记都不提供 `toMarkdown`：Markdown 没有颜色，退回 `<span style>` 等于
+ * 把 HTML 塞进 Markdown。导出时按丢格式不丢文字处理，与卸载插件时的 §9.3
+ * 兜底同一条立场（方案 §4.3）。
+ */
 export function createColorPlugin(): EditorPlugin {
   return {
     name: "color",

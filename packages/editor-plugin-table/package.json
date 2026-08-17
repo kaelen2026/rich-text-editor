@@ -10,6 +10,8 @@
   },
   "dependencies": {
     "@kaelen/editor-runtime": "workspace:*",
+    "@kaelen/editor-schema": "workspace:*",
+    "@kaelen/editor-shared-types": "workspace:*",
     "prosemirror-model": "^1.25.11",
     "prosemirror-state": "^1.4.4",
     "prosemirror-tables": "^1.8.5"

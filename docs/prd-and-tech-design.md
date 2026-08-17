@@ -75,8 +75,27 @@
 
 - 主存储格式为**信封化版本 JSON**（见 §9.1），文档体为纯 ProseMirror 节点 JSON。
 - 支持 JSON → HTML 渲染，前后端共用同一 serializer（见 §12.1）。
-- 支持 HTML / Markdown 导入导出；不支持的结构必须有明确降级策略，且**降级不得丢弃原始内容**。
+- 支持 HTML / Markdown 导入导出；不支持的结构必须有明确降级策略，且**降级不得丢弃原始内容**。Markdown 的降级边界见下。
 - 文档读取时执行 Schema 校验与版本迁移；遇到未知节点走 §9.3 兜底而非报错。
+
+**Markdown 是交换格式，不是存储格式。** 存储永远是信封 JSON；导出一次不改动文档。因此降级的口径与 §9.3 缺插件时完全一致——**丢格式，不丢文字**：
+
+| Markdown 表达不了的 | 导出行为 |
+| --- | --- |
+| 下划线、文字/背景颜色 | 丢标记，留文字。刻意不退回 `<u>`/`<span style>`：那是把 HTML 塞进 Markdown，换个渲染器就成了字面量尖括号 |
+| 块级水平对齐 | 丢属性，留文字 |
+| 图片的二次编辑属性（尺寸、裁剪、旋转、滤镜、环绕） | 丢属性，导出 `![alt](src)`。它们本就是非破坏性展示属性，原图与替代文本都在 |
+| 单元格 `colspan` / `rowspan` | 按占位网格摊平：被合并覆盖的格子留空，**列不错位**。合并关系丢在导出结果里，文档里原样保留 |
+| 未安装插件的节点（`unknown_block`） | 导出 `attrs.original` 里的文字，而不是占位说明语 |
+
+导入方向多两条硬规则，理由都不是格式而是安全：
+
+- **裸 HTML 一律按纯文本收下**（解析器 `html: false`）。Markdown 同样是不可信来源，放行裸 HTML 等于在没有 §11.3 白名单管线的地方开一个 HTML 入口。`<script>` 因此原样变成文字，既不执行也不丢内容。
+- **图片降级为链接**。Markdown 里的图片地址与粘贴进来的 HTML 是同一类东西——来源不可信、指向任意主机，直接写进 `co_image.src` 就是 §11.3.1 明令禁止的热链。导入时降级成链接（地址与说明文字都留下）并返回 `image-as-link` 记录，宿主可据此走 `image.insert` 正式转存。
+
+链接协议白名单在导入处再判一次（§11.3 的同一份名单）。解析器自带的 `javascript:` / `data:` / `vbscript:` / `file:` 拦截是第一道，本项目的 https/http/mailto/tel 白名单是第二道；两道都不放行时丢标记留文字，并返回 `unsafe-link` 记录。
+
+智能标点在解析器侧同样保持关闭，中文引号不被改写（§4.4）。软换行落成硬换行而不是空格：CommonMark 那条"软换行等价于一个空格"的规则来自英文排版，中文段落里凭空多出一个空格是可见的错误。
 
 ### 4.4 中文与国际化要求
 
@@ -166,7 +185,8 @@ Tiptap 可用于原型开发、借鉴 Extension 实现或快速引入成熟能�
 ```text
 packages/
   editor-shared-types/          # 共享类型与协议（Envelope、DocumentPatch、事件、CoreNodeSpec）。零依赖
-  editor-schema/                # 冻结核心 NodeSpec/MarkSpec + 信封 + 迁移链 + DOMOutputSpec→HTML serializer
+  editor-schema/                # 冻结核心 NodeSpec/MarkSpec + 信封 + 迁移链 + DOMOutputSpec→HTML serializer + JSON→Markdown serializer
+  editor-markdown/              # Markdown→JSON 解析（唯一带 Markdown 解析器依赖的包，可选安装）
   editor-pm-adapter/            # ProseMirror 适配：Schema 装配、Session、核心命令、剪贴板、外部 HTML、Patch 转换
   editor-runtime/               # 插件解析与降级、命令分发、事件、自动保存、熔断
   editor-api/                   # 面向业务的稳定接口 createEditor / RichEditor
@@ -186,10 +206,11 @@ apps/
   remote-image-service/         # 远端图片转存的 Node 演示服务
 ```
 
-两处与早期规划不同，都是刻意的：
+三处与早期规划不同，都是刻意的：
 
 - **没有 `editor-plugin-basic`。** 基础块与文本样式属于冻结核心集，Schema 在 `editor-schema`、命令与快捷键在 `editor-pm-adapter` 的核心命令表。把它们做成插件等于让"能被卸载"这件事发生在核心集上，与 §9.2 的冻结承诺矛盾。
 - **没有 `editor-plugin-clipboard`。** 复制粘贴要直接操作 `Slice`/`Transaction`，且核心块本身就需要复制粘贴；它是内核能力而不是可选能力，因此落在 `editor-pm-adapter`（`clipboard.ts`、`external-html.ts`）。
+- **Markdown 的两个方向不在同一个包。** 导出只是字符串拼接，和 HTML 渲染同一条约束（无 DOM、前后端共用），因此留在 `editor-schema`；导入需要一个 CommonMark 解析器，那是唯一一处外部运行时依赖，装在可选的 `editor-markdown` 里。只导出的宿主因此不为解析器付出体积——这与"没设置对齐时 `toDOM` 不多写一个属性"是同一条取舍。
 
 ### 7.1 分层约束
 
@@ -199,7 +220,8 @@ apps/
 - 能力插件只通过 Schema、Command、Clipboard、NodeView 等注册中心扩展 runtime，不直接修改内部状态。
 - React/Vue 适配层不包含编辑规则；其职责是挂载 DOM、订阅状态与渲染 UI。
 - 工具栏**行为**属于 `editor-ui-model`，框架 UI 只决定外观（§10.4）。
-- 插件的 `toDOM` 只能返回 `DOMOutputSpec` 数组结构，**禁止访问 `document` 或任何 DOM API**（§12.1 依赖此约束在服务端渲染）。以 lint 规则 + 单测强制。
+- 插件的 `toDOM` 只能返回 `DOMOutputSpec` 数组结构，**禁止访问 `document` 或任何 DOM API**（§12.1 依赖此约束在服务端渲染）。以 lint 规则 + 单测强制。同一条约束适用于 `toMarkdown`，同一条 lint 一起检查。
+- Markdown 映射与 `toDOM`/`parseDOM` 放在同一份节点定义里：`toMarkdown` 是纯函数（和 `toDOM` 同类），`fromMarkdown` 是声明式规则（和 `parseDOM` 同类，没有可执行钩子）。节点的每一种表达跟着节点定义走，新增一个节点不必改两个包——漏改的那一个不会有任何报错。
 
 ---
 
@@ -550,10 +572,13 @@ M1 使用 `prosemirror-history`。协同（M4）必须换成 Yjs 的 UndoManager
 
 1. runtime 维护全局 `composing` 标志，通过 `SelectionSnapshot.composing` 与 `compositionChanged` 事件暴露。
 2. 组合态期间：挂起所有非用户输入事务（程序化事务、远端事务、异步回填），入队；`compositionend` 后合并应用并重新映射位置。
-3. 组合态期间：冻结覆盖当前文本节点的 Decoration 更新；不重建该节点的 NodeView。
+3. 组合态期间：冻结覆盖当前文本节点的 Decoration 更新；不重建该节点的 NodeView。执行点在 `EditorSession`——它包裹每个插件的 `decorations`，组合期间光标所在文本块范围内沿用上一次的结果，范围之外照常更新（别处的上传进度条不该被组合态冻住）。组合期间会改文档的事务都排了队，位置不动，因此旧 Decoration 直接复用是安全的。
 4. 组合态期间：输入规则与自动格式化不执行。
 5. 组合态期间调用 `execute()` 返回 `{ok:false, reason:'composing'}`，由 UI 决定禁用还是排队。
 6. 兜底超时：`compositionend` 未触发（部分输入法/异常路径）时 5 秒后强制退出组合态并冲刷队列。
+7. 第 2 条的冲刷时机不是 `compositionend` 事件本身，而是**其后的第一笔事务**（上屏文本就是那一笔），并留 250ms 兜底。ProseMirror 要在事件之后才把上屏文本从 DOM 读回模型；在那之前冲刷，读回会按 DOM 重写整个文本块，刚落地的回填连同位置一起被抹掉。冲刷还必须放进微任务，不能在读回的调用栈里插队。
+
+第 3、7 两条都是 S25 的真实浏览器用例逼出来的：前者从来没实现过（唯一的 Decoration 盖在图片节点上，这条路径没有代码走到），后者的单测在 jsdom 里一直是绿的（jsdom 没有"从 DOM 读回模型"那一步）。**组合态的正确性只有在真实浏览器里才判得了。**
 
 ### 9.7 NodeView 跨框架策略
 
@@ -692,6 +717,8 @@ clipboardData.setData('application/x-company-editor+json', JSON.stringify(payloa
 
 允许的输入结构：`p`、`br`、`strong`/`b`、`em`/`i`、`u`、`s`/`del`、`a`、`h1`~`h6`、`ul`、`ol`、`li`、`blockquote`、`pre`、`code`、`table`、`thead`、`tbody`、`tr`、`td`、`th`、`img`。
 
+**容器元素（`div`、`section`、`article`、`main` 等）是透明的**：里面的块结构原样往上并，只有连续的行内内容才收成一个段落，容器上的对齐传给它收出来的那些段落。把容器当段落处理会把标题、正文、列表拼成一行——而真实网页复制出来的 HTML 几乎总是裹着容器，`fixtures/clipboard/` 里的样本恰好都不是，这条路径因此一直没被 golden 走到（S25 修）。
+
 属性策略：
 
 | 项 | 规则 |
@@ -742,6 +769,7 @@ clipboardData.setData('application/x-company-editor+json', JSON.stringify(payloa
 - `editor-schema` 是唯一渲染真理，前后端共用同一份 Schema 与 serializer，独立版本号，与文档 `schemaVersion` 对应。
 - 因 §7.1 约束 `toDOM` 只返回 `DOMOutputSpec` 数组、不触碰 `document`，可用纯 JS walker 把 DOMOutputSpec 序列化为 HTML 字符串：服务端**不需要 jsdom**，且该 spec 可导出为数据供其他语言实现渲染。
 - 若某条历史链路确实会收到外部 HTML，须先经 §11.3 管线转为 JSON 再入库，不得直接存储。
+- Markdown 导出走同一条路：`documentToMarkdown` 同样只吃 JSON、不碰 DOM，与 `getHTML()` 在同一个包里。`pnpm render <doc.json> --format markdown` 与进程内 `getMarkdown()` 产出同一份字节，由 `tests/server-render.test.ts` 钉住。**Markdown 导入不在服务端路径上**，与"服务端不接受客户端 HTML"同一条立场。
 
 ### 12.2 版本迁移
 
@@ -775,6 +803,8 @@ clipboardData.setData('application/x-company-editor+json', JSON.stringify(payloa
 ## 14. 性能预算与规模上限
 
 没有数字的性能要求不可证伪，等于风险未被缓解。当前门禁使用的是初始阈值，不是已采集的 CI 历史基线；拿到真实业务样本和连续 CI 数据后必须校准。
+
+校准的机制已经就位（S27）：每次 CI 把 `bench-run.json` 归档为 artifact，`scripts/calibrate-budgets.mjs` 从同环境的三次以上记录反推基线。**但校准本身还没做**——它需要真实的连续运行记录，编不出来。在那之前要认清这道门禁现在的实际效力：本地实测多数指标只有当前上限的 1/30 到 1/90，也就是说十倍的性能回归它也不会响。它拦的是彻底跑崩，不是变慢。口径与流程见 `docs/performance-budgets.md`。
 
 ### 14.1 基准与预算
 

@@ -7,9 +7,9 @@ import {
   type SelectionSnapshot,
 } from "@kaelen/editor-shared-types";
 import { type MarkType, Node as ProseMirrorNode, type Schema } from "prosemirror-model";
-import { type Command, EditorState, type Plugin, type Transaction } from "prosemirror-state";
+import { type Command, EditorState, Plugin, type Transaction } from "prosemirror-state";
 import { Mapping } from "prosemirror-transform";
-import { type DirectEditorProps, EditorView } from "prosemirror-view";
+import { DecorationSet, type DirectEditorProps, EditorView } from "prosemirror-view";
 import {
   hasLanguageBlock,
   isBlockAligned,
@@ -31,6 +31,15 @@ import { restoreDoc, sanitizeDoc } from "./unknown";
 export type SessionChangeListener = (docChanged: boolean) => void;
 /** 文档事务观察者。仅内部运行时使用，以便生成平台 patch 而不向业务泄漏 PM。 */
 export type SessionTransactionListener = (transaction: Transaction) => void;
+
+/**
+ * `compositionend` 之后等下一笔事务来冲刷队列的兜底时限。
+ *
+ * 正常路径不会走到它——上屏文本会带来那一笔事务。它兜的是"组合结束但没产出任何
+ * 文字"（用户按 Esc 撤掉候选）的情况：那时没有后续事务，位置也没动，晚一点冲刷
+ * 只影响回填出现的时机。取值宽于 ProseMirror 自己的 20ms 读回定时器。
+ */
+const COMPOSITION_FLUSH_FALLBACK_MS = 250;
 
 /** 受保护调用的结果。失败时状态已回滚，`error` 原样交给调用方上报。 */
 export type ProtectedOutcome<TValue> = { ok: true; value: TValue } | { ok: false; error: unknown };
@@ -69,6 +78,9 @@ export class EditorSession {
   private mode: EditorMode;
   private isComposing = false;
   private compositionTimer: ReturnType<typeof setTimeout> | undefined;
+  /** 组合结束后队列还等着冲刷，见 `scheduleFlush`。 */
+  private flushScheduled = false;
+  private flushTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly pendingTransactions: Array<{ transaction: Transaction; mapping: Mapping }> = [];
   /** 当前文档节点数的保守上界，见 `insertedNodeCount`。 */
   private nodeCountBound = 0;
@@ -111,7 +123,55 @@ export class EditorSession {
   }
 
   private extensionPlugins(): readonly Plugin[] {
-    return this.extensions.flatMap((extension) => extension.plugins(this.schema));
+    return this.extensions
+      .flatMap((extension) => extension.plugins(this.schema))
+      .map((plugin) => this.freezeComposingDecorations(plugin));
+  }
+
+  /**
+   * 组合态期间冻结覆盖当前文本节点的 Decoration（方案 §9.6 第 3 条）。
+   *
+   * 组合中的那段文本此刻由浏览器和输入法接管，DOM 与模型短暂不同步。这时候
+   * 重算一个盖在它上面的 Decoration，ProseMirror 就会去重建那段 DOM——候选文本
+   * 被抹掉、组合被打断，用户看到的是打一半的字突然消失。
+   *
+   * 只冻当前文本块这一段，不是整张 Decoration 表：别处的上传进度条照常动，
+   * 冻结的代价不该扩散到与组合无关的地方。范围之外用新算出来的，范围之内沿用
+   * 上一次的结果——组合期间会改文档的事务都在 `dispatch` 里排了队，位置不会动，
+   * 因此旧 Decoration 直接复用是安全的，不需要重新映射。
+   */
+  private freezeComposingDecorations(plugin: Plugin): Plugin {
+    const decorations = plugin.spec.props?.decorations;
+    if (!decorations) {
+      return plugin;
+    }
+    const session = this;
+    let previous: DecorationSet | undefined;
+    return new Plugin({
+      ...plugin.spec,
+      props: {
+        ...plugin.spec.props,
+        decorations(this: Plugin, state: EditorState) {
+          const raw = decorations.call(this, state);
+          // 插件也可以返回别的 `DecorationSource`（例如另一棵视图的 decoration 树）。
+          // 那种形态不支持按范围增删，冻结无从下手，原样放行而不是丢掉。
+          if (!(raw instanceof DecorationSet)) {
+            return raw;
+          }
+          if (!session.isComposing || !previous) {
+            previous = raw;
+            return raw;
+          }
+          const { from, to } = composingTextblockRange(state);
+          if (from === to) {
+            return raw;
+          }
+          // 范围内换回旧的：先把新算出来的那部分摘掉，再把旧的贴回去。
+          const outside = raw.remove(raw.find(from, to));
+          return outside.add(state.doc, previous.find(from, to));
+        },
+      },
+    });
   }
 
   get docJSON(): NodeJSON {
@@ -262,6 +322,11 @@ export class EditorSession {
       clearTimeout(this.compositionTimer);
       this.compositionTimer = undefined;
     }
+    if (this.flushTimer !== undefined) {
+      clearTimeout(this.flushTimer);
+      this.flushTimer = undefined;
+    }
+    this.flushScheduled = false;
     this.pendingTransactions.length = 0;
     this.isComposing = false;
     for (const extension of this.extensions) {
@@ -379,6 +444,16 @@ export class EditorSession {
       this.onDocumentTransaction(transaction);
     }
     this.onChange(transaction.docChanged);
+    // 上屏文本本身就是"下一笔事务"。它到了，模型就追上 DOM 了，此刻冲刷队列
+    // 才安全，且它的 mapping 已经在上面并进了每一笔待冲刷事务。
+    //
+    // 但要等这一笔走完再冲：此刻我们正站在 ProseMirror 读回 DOM 的调用栈里，
+    // 在那当中再派发一笔事务，读回的后半段会按它自己那份旧假设继续跑，刚插进去
+    // 的内容随即被抹掉。微任务足够——它在当前同步栈清空之后、下一次渲染之前。
+    if (this.flushScheduled && !this.isComposing) {
+      this.claimScheduledFlush();
+      queueMicrotask(() => this.flushPendingTransactions());
+    }
   }
 
   /**
@@ -435,8 +510,45 @@ export class EditorSession {
     }
     this.onCompositionChange(composing);
     if (!composing) {
-      this.flushPendingTransactions();
+      this.scheduleFlush();
     }
+  }
+
+  /**
+   * `compositionend` 之后不能立刻冲刷队列。
+   *
+   * ProseMirror 要等它自己的 DOM 观察器把上屏文本从 DOM 读回模型，那发生在事件
+   * **之后**。在那之前把队列应用进去，紧接着的读回会按 DOM 重写整个文本块——刚
+   * 落地的回填连同它的位置一起被抹掉。这条是真实浏览器用例发现的：jsdom 里没有
+   * 读回这一步，同步冲刷看上去一直是对的。
+   *
+   * 因此等下一笔事务再冲刷：上屏文本本身就是那一笔，而它的 mapping 正是回填需要
+   * 的位移。一直没有下一笔（组合没产出任何文字）时由超时兜底，那种情况下位置本来
+   * 也没动。
+   */
+  private scheduleFlush(): void {
+    if (this.pendingTransactions.length === 0 || this.flushScheduled) {
+      return;
+    }
+    this.flushScheduled = true;
+    this.flushTimer = setTimeout(() => {
+      if (this.claimScheduledFlush()) {
+        this.flushPendingTransactions();
+      }
+    }, COMPOSITION_FLUSH_FALLBACK_MS);
+  }
+
+  /** 取消兜底计时器并把"待冲刷"标志落掉。冲刷本身会走 applyTransaction，不落标志就会递归。 */
+  private claimScheduledFlush(): boolean {
+    if (!this.flushScheduled) {
+      return false;
+    }
+    this.flushScheduled = false;
+    if (this.flushTimer !== undefined) {
+      clearTimeout(this.flushTimer);
+      this.flushTimer = undefined;
+    }
+    return true;
   }
 
   /**
@@ -597,4 +709,18 @@ export class EditorSession {
     }
     return undefined;
   }
+}
+
+/**
+ * 正在被输入法接管的那段文本的范围：光标所在文本块的内容区间。
+ *
+ * 取整个文本块而不是光标处的单个文本节点：ProseMirror 会按标记把文本切成多个
+ * 节点，而组合可能横跨其中几个；只冻一个节点，相邻那段照样会被重建。
+ */
+function composingTextblockRange(state: EditorState): { from: number; to: number } {
+  const $from = state.selection.$from;
+  if (!$from.parent.isTextblock) {
+    return { from: 0, to: 0 };
+  }
+  return { from: $from.start(), to: $from.end() };
 }

@@ -38,9 +38,18 @@ importers:
       '@kaelen/editor-runtime':
         specifier: workspace:*
         version: link:packages/editor-runtime
+      '@kaelen/editor-schema':
+        specifier: workspace:*
+        version: link:packages/editor-schema
+      '@kaelen/editor-shared-types':
+        specifier: workspace:*
+        version: link:packages/editor-shared-types
       '@kaelen/editor-ui-model':
         specifier: workspace:*
         version: link:packages/editor-ui-model
+      '@playwright/test':
+        specifier: ^1.62.1
+        version: 1.62.1
       '@testing-library/react':
         specifier: ^16.3.0
         version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -92,6 +101,9 @@ importers:
       '@kaelen/editor-api':
         specifier: workspace:*
         version: link:../../packages/editor-api
+      '@kaelen/editor-markdown':
+        specifier: workspace:*
+        version: link:../../packages/editor-markdown
       '@kaelen/editor-plugin-color':
         specifier: workspace:*
         version: link:../../packages/editor-plugin-color
@@ -113,6 +125,9 @@ importers:
       '@kaelen/editor-react-ui':
         specifier: workspace:*
         version: link:../../packages/editor-react-ui
+      '@kaelen/editor-runtime':
+        specifier: workspace:*
+        version: link:../../packages/editor-runtime
       '@kaelen/editor-schema':
         specifier: workspace:*
         version: link:../../packages/editor-schema
@@ -125,6 +140,12 @@ importers:
       lucide-react:
         specifier: ^1.31.0
         version: 1.31.0(react@19.2.8)
+      prosemirror-state:
+        specifier: ^1.4.3
+        version: 1.4.4
+      prosemirror-view:
+        specifier: ^1.41.4
+        version: 1.42.2
       react:
         specifier: ^19.2.0
         version: 19.2.8
@@ -157,11 +178,42 @@ importers:
         specifier: workspace:*
         version: link:../editor-shared-types
 
+  packages/editor-markdown:
+    dependencies:
+      '@kaelen/editor-schema':
+        specifier: workspace:*
+        version: link:../editor-schema
+      '@kaelen/editor-shared-types':
+        specifier: workspace:*
+        version: link:../editor-shared-types
+      markdown-it:
+        specifier: ^15.0.0
+        version: 15.0.0
+    devDependencies:
+      '@kaelen/editor-api':
+        specifier: workspace:*
+        version: link:../editor-api
+      '@kaelen/editor-plugin-color':
+        specifier: workspace:*
+        version: link:../editor-plugin-color
+      '@kaelen/editor-plugin-image':
+        specifier: workspace:*
+        version: link:../editor-plugin-image
+      '@kaelen/editor-plugin-link':
+        specifier: workspace:*
+        version: link:../editor-plugin-link
+      '@kaelen/editor-plugin-table':
+        specifier: workspace:*
+        version: link:../editor-plugin-table
+
   packages/editor-plugin-color:
     dependencies:
       '@kaelen/editor-runtime':
         specifier: workspace:*
         version: link:../editor-runtime
+      '@kaelen/editor-shared-types':
+        specifier: workspace:*
+        version: link:../editor-shared-types
     devDependencies:
       '@kaelen/editor-api':
         specifier: workspace:*
@@ -169,9 +221,6 @@ importers:
       '@kaelen/editor-schema':
         specifier: workspace:*
         version: link:../editor-schema
-      '@kaelen/editor-shared-types':
-        specifier: workspace:*
-        version: link:../editor-shared-types
 
   packages/editor-plugin-image:
     dependencies:
@@ -181,6 +230,9 @@ importers:
       '@kaelen/editor-runtime':
         specifier: workspace:*
         version: link:../editor-runtime
+      '@kaelen/editor-schema':
+        specifier: workspace:*
+        version: link:../editor-schema
       prosemirror-state:
         specifier: ^1.4.3
         version: 1.4.4
@@ -197,6 +249,9 @@ importers:
       '@kaelen/editor-runtime':
         specifier: workspace:*
         version: link:../editor-runtime
+      '@kaelen/editor-schema':
+        specifier: workspace:*
+        version: link:../editor-schema
     devDependencies:
       '@kaelen/editor-api':
         specifier: workspace:*
@@ -210,6 +265,12 @@ importers:
       '@kaelen/editor-runtime':
         specifier: workspace:*
         version: link:../editor-runtime
+      '@kaelen/editor-schema':
+        specifier: workspace:*
+        version: link:../editor-schema
+      '@kaelen/editor-shared-types':
+        specifier: workspace:*
+        version: link:../editor-shared-types
       prosemirror-model:
         specifier: ^1.25.11
         version: 1.25.11
@@ -865,6 +926,11 @@ packages:
     os: [linux]
     libc: [glibc]
 
+  '@playwright/test@1.62.1':
+    resolution: {integrity: sha512-DTcUc8qii+cpHvtOwggMtBRMjKZHXYWdw8syRYu2vtzuq4Wxphqq4NfCs5Zt44L6mA8rfDfj+PHnxFc/FeK6mQ==}
+    engines: {node: '>=20'}
+    hasBin: true
+
   '@rolldown/pluginutils@1.0.0-rc.3':
     resolution: {integrity: sha512-eybk3TjzzzV97Dlj5c+XrBFW57eTNhzod66y9HrBlzJ6NsCrWCp/2kaPS3K9wJmurBC0Tdw4yPjXKZqlznim3Q==}
 
@@ -1170,6 +1236,9 @@ packages:
   argparse@2.0.1:
     resolution: {integrity: sha512-8+9WqebbFzpX9OR+Wa6O29asIogeRMzcGtAINdpMHHyAg10f05aSFVBbcEqGf/PXw1EjAZ+q2/bEBg3DvurK3Q==}
 
+  argparse@3.0.0:
+    resolution: {integrity: sha512-BOp5NMrHqKxmq/OLr+clzzrRxgOKSLkcjmkWuChp7Irqwn4s74WjOBPIgWfA/HMcBnVkZ5XEuf9uUqzlpfCQ6A==}
+
   aria-query@5.3.0:
     resolution: {integrity: sha512-b0P0sZPKtyu8HkeRAfCq0IfURZK+SuwMjY1UXGBU27wpAiTwQAIlq56IbIO+ytk/JjS1fMR14ee5WBBfKi5J6A==}
 
@@ -1403,6 +1472,11 @@ packages:
       picomatch:
         optional: true
 
+  fsevents@2.3.2:
+    resolution: {integrity: sha512-xiqMQR4xAeHTuB9uWm+fFRcIOgKBMiOBP+eXiyT7jsgVCq1bkVygt00oASowB7EdtpOHaaPgKt812P9ab+DDKA==}
+    engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
+    os: [darwin]
+
   fsevents@2.3.3:
     resolution: {integrity: sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==}
     engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
@@ -1547,6 +1621,9 @@ packages:
   lines-and-columns@1.2.4:
     resolution: {integrity: sha512-7ylylesZQ/PV29jhEDl3Ufjo6ZX7gCqJr5F7PKrqc93v7fzSymt1BpwEU8nAUXs8qzzvqhbjhK5QZg6Mt/HkBg==}
 
+  linkify-it@6.1.0:
+    resolution: {integrity: sha512-wJ/TwpSDTLepCrQoYWYIExIKg5Zchex2Nn5yk2mFnB+6PtdkHtyLx742md9csRjjOnGkKIS/RrbY7l8D6gT9Vw==}
+
   lint-staged@16.4.0:
     resolution: {integrity: sha512-lBWt8hujh/Cjysw5GYVmZpFHXDCgZzhrOm8vbcUdobADZNOK/bRshr2kM3DfgrrtR1DQhfupW9gnIXOfiFi+bw==}
     engines: {node: '>=20.17'}
@@ -1585,8 +1662,15 @@ packages:
   magic-string@0.30.21:
     resolution: {integrity: sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==}
 
+  markdown-it@15.0.0:
+    resolution: {integrity: sha512-Lf8ajvVNdRpzSNB4VegxNy7gjs8gU35l4b4+ET49LrQC5PKYwLZ72u60LeJ9gv3qiaesuYjJWCyVeQmv/QWKQw==}
+    hasBin: true
+
   mdn-data@2.27.1:
     resolution: {integrity: sha512-9Yubnt3e8A0OKwxYSXyhLymGW4sCufcLG6VdiDdUGVkPhpqLxlvP5vl1983gQjJl3tqbrM731mjaZaP68AgosQ==}
+
+  mdurl@2.1.0:
+    resolution: {integrity: sha512-1+HBaOx0zi/dQWht8rNv9MYf9qqpqL/kxI0hXImU6Y547zM6Sni8BQibt7ifgMcYtQg41ao3Ivd6cnSM86inpg==}
 
   meow@13.2.0:
     resolution: {integrity: sha512-pxQJQzB6djGPXh08dacEloMFopsOqGVRKFPYvPOt9XDZ1HasbgDZA74CJGreSU4G3Ak7EFJGoiH2auq+yXISgA==}
@@ -1649,6 +1733,16 @@ packages:
     resolution: {integrity: sha512-RvwwcruNjI1ncT5xRakeyS9Lf8lcItv34KD+aif+VH9kduAyfYBipGh12274xtenIPZ119/R9BdTBa8gAwSh0A==}
     engines: {node: '>=12'}
 
+  playwright-core@1.62.1:
+    resolution: {integrity: sha512-wPYSwEBJY9GHraISXqyqtx0na0LpO3XEX7jNDhntbex7tzUS7kLnZsOlFruFJB4Hi/rhDMjXGqHewDZ68nYZVw==}
+    engines: {node: '>=20'}
+    hasBin: true
+
+  playwright@1.62.1:
+    resolution: {integrity: sha512-0M+L3LAD8/nm554LOla9Ayx0j0tmFZ0FBcoQ7F1VuVHpM/XpiC8RcDzBQB8W5+hA8L22THxELzeF+2WcUzvcLg==}
+    engines: {node: '>=20'}
+    hasBin: true
+
   postcss@8.5.26:
     resolution: {integrity: sha512-u82N74LFzG8ca+dD8puPnplTXoGH4fTPpVGuIbt36G3qvNlkvfD0lEAZSxaly3KX8TS/L1A1gsCEmvKmBcVbkQ==}
     engines: {node: ^10 || ^12 || >=14}
@@ -1686,6 +1780,10 @@ packages:
 
   prosemirror-view@1.42.2:
     resolution: {integrity: sha512-Pdg0l5kXm8aLDquFAnQFTCITg0q44sLqBlHlpsVLD9segdOao8TOfQdAhCrCXyVgPSRr6UDDROOIWA3bIrN9YQ==}
+
+  punycode.js@2.3.1:
+    resolution: {integrity: sha512-uxFIHU0YlHYhDQtV4R9J6a52SLx28BCjT+4ieh7IGbgwVJWO+km431c4yRlREUAsAmt/uMjQUyQHNEPf0M39CA==}
+    engines: {node: '>=6'}
 
   punycode@2.3.1:
     resolution: {integrity: sha512-vYt7UD1U9Wg6138shLtLOvdAu+8DsC/ilFtEVHcH+wydcSpNE20AfSOduf6MkRFahL5FY7X1oU7nKVZFtfq8Fg==}
@@ -1880,6 +1978,9 @@ packages:
     resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
     engines: {node: '>=14.17'}
     hasBin: true
+
+  uc.micro@3.0.0:
+    resolution: {integrity: sha512-U3PppEkleoTnIfi8BozMx3yju3qc/L6SwqWo2Sw+54PX+PX0q9I+r1Um5HCmqD7n9VDX5/v3vQH/AjA6deDdtw==}
 
   undici-types@7.29.0:
     resolution: {integrity: sha512-vamA8dGlzMwhpyYpQp9d8vka3o4D/yn5I7ez7Or+msDA4bZ8Uh+Zy91WvWf3I73gDAkFha9JcYRqm2li0Npfgg==}
@@ -2535,6 +2636,10 @@ snapshots:
   '@napi-rs/lzma-linux-x64-gnu@1.5.1':
     optional: true
 
+  '@playwright/test@1.62.1':
+    dependencies:
+      playwright: 1.62.1
+
   '@rolldown/pluginutils@1.0.0-rc.3': {}
 
   '@rollup/rollup-android-arm-eabi@4.62.4':
@@ -2827,6 +2932,8 @@ snapshots:
 
   argparse@2.0.1: {}
 
+  argparse@3.0.0: {}
+
   aria-query@5.3.0:
     dependencies:
       dequal: 2.0.3
@@ -3048,6 +3155,9 @@ snapshots:
     optionalDependencies:
       picomatch: 4.0.5
 
+  fsevents@2.3.2:
+    optional: true
+
   fsevents@2.3.3:
     optional: true
 
@@ -3202,6 +3312,10 @@ snapshots:
 
   lines-and-columns@1.2.4: {}
 
+  linkify-it@6.1.0:
+    dependencies:
+      uc.micro: 3.0.0
+
   lint-staged@16.4.0:
     dependencies:
       commander: 14.0.3
@@ -3248,7 +3362,18 @@ snapshots:
     dependencies:
       '@jridgewell/sourcemap-codec': 1.5.5
 
+  markdown-it@15.0.0:
+    dependencies:
+      argparse: 3.0.0
+      entities: 8.0.0
+      linkify-it: 6.1.0
+      mdurl: 2.1.0
+      punycode.js: 2.3.1
+      uc.micro: 3.0.0
+
   mdn-data@2.27.1: {}
+
+  mdurl@2.1.0: {}
 
   meow@13.2.0: {}
 
@@ -3296,6 +3421,14 @@ snapshots:
   picocolors@1.1.1: {}
 
   picomatch@4.0.5: {}
+
+  playwright-core@1.62.1: {}
+
+  playwright@1.62.1:
+    dependencies:
+      playwright-core: 1.62.1
+    optionalDependencies:
+      fsevents: 2.3.2
 
   postcss@8.5.26:
     dependencies:
@@ -3365,6 +3498,8 @@ snapshots:
       prosemirror-model: 1.25.11
       prosemirror-state: 1.4.4
       prosemirror-transform: 1.12.0
+
+  punycode.js@2.3.1: {}
 
   punycode@2.3.1: {}
 
@@ -3547,6 +3682,8 @@ snapshots:
       fsevents: 2.3.3
 
   typescript@5.9.3: {}
+
+  uc.micro@3.0.0: {}
 
   undici-types@7.29.0: {}
 

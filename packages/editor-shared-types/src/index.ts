@@ -91,6 +91,33 @@ export interface LoadResult {
 }
 
 /**
+ * Markdown 导入的降级记录。Markdown 是交换格式不是存储格式，凡是它表达不了
+ * 或不该原样接受的结构都在这里留痕，宿主据此提示用户，而不是让内容静悄悄变样
+ * （方案 §4.3）。
+ */
+export type MarkdownDegradeKind =
+  /** 图片按链接落地：远端图片一律先服务端转存，不能直接进文档（方案 §11.3.1）。 */
+  | "image-as-link"
+  /** 链接协议不在白名单内，标记被丢弃、文本保留。 */
+  | "unsafe-link"
+  /** 目标节点所属插件未安装，结构降级为段落。 */
+  | "missing-plugin";
+
+export interface MarkdownDegrade {
+  kind: MarkdownDegradeKind;
+  /** 涉及的具体项：节点名、URL 或原始文本片段。 */
+  item?: string;
+  count: number;
+  message: string;
+}
+
+export interface MarkdownImportResult {
+  doc: NodeJSON;
+  /** 按 `kind` + `item` 归并后的降级记录，按首次出现顺序。 */
+  degrades: MarkdownDegrade[];
+}
+
+/**
  * 文档字数。两个口径都按 Unicode 字符计，CJK 一个字算一个字符；
  * 刻意不提供按空格分词的 word count——中文里那个数字没有意义（方案 §4.4）。
  */
@@ -316,6 +343,75 @@ export interface CoreDOMAttributeRule {
 /** 节点只能按标签解析；样式解析只对标记有意义。 */
 export type CoreParseRule = CoreTagParseRule | CoreStyleParseRule;
 
+/**
+ * Markdown 序列化上下文。只做字符串运算，不触碰 DOM——与 `toDOM` 同一条约束，
+ * 因此同一份映射在浏览器和 Node 里结果相同（方案 §12.1）。
+ */
+export interface MarkdownSerializeContext {
+  /** 渲染一个子块，返回不带首尾空行的片段。 */
+  block(node: NodeJSON): string;
+  /** 渲染一组子块，块之间空一行。 */
+  blocks(nodes: readonly NodeJSON[]): string;
+  /** 渲染行内内容，包含其上的标记。 */
+  inline(nodes: readonly NodeJSON[]): string;
+  /** 逐行加前缀。首行前缀可不同，用于列表项的"标记 + 悬挂缩进"。 */
+  prefixLines(text: string, firstPrefix: string, restPrefix?: string): string;
+  /** 转义会被 Markdown 当成结构的字符。 */
+  escapeText(value: string): string;
+}
+
+/**
+ * `toMarkdown` 能看到的节点视图。和 `CoreNodeView` 的区别是多一个 `content`：
+ * 表格必须先知道有几列才能写出对齐行，光有 `attrs` 排不出来。
+ */
+export interface CoreMarkdownNodeView {
+  attrs: Record<string, unknown>;
+  content: readonly NodeJSON[];
+}
+
+/** 节点 → Markdown 片段。行内节点返回行内片段，块节点返回不含首尾空行的块。 */
+export type CoreNodeToMarkdown = (
+  node: CoreMarkdownNodeView,
+  context: MarkdownSerializeContext,
+) => string;
+
+/** 标记 → Markdown 片段。`content` 是已经渲染好的行内内容。 */
+export type CoreMarkToMarkdown = (mark: CoreMarkView, content: string) => string;
+
+/**
+ * Markdown 解析规则。与 `parseDOM` 同一套立场：只有声明，没有可执行钩子——
+ * 规则要能被审计，也要能在服务端复用。
+ */
+export interface CoreMarkdownParseRule {
+  /** markdown-it 的 token 类型。成对 token 写去掉 `_open` 的名字，如 `heading`。 */
+  token: string;
+  /** 进一步按 token 的标签名区分，用于 `h1`–`h6` 这种同类型多标签的情况。 */
+  tag?: string;
+  /** 命中时写入的固定属性。 */
+  attrs?: Record<string, unknown>;
+  /** 从 token 上声明式读取的属性。 */
+  attrsFromToken?: Record<string, CoreMarkdownAttributeRule>;
+}
+
+/** Markdown token 属性的声明式读取与规范化规则。 */
+export interface CoreMarkdownAttributeRule {
+  /** `attribute` 读 token 的 HTML 属性，`info` 读围栏语言串。 */
+  from: "attribute" | "info";
+  attribute?: string;
+  /**
+   * `token` 与 `CoreDOMAttributeRule` 同一套标识符字符集；`url` 按 `protocols`
+   * 白名单校验并归一化——Markdown 文件同样是不可信来源，一个
+   * `[x](javascript:…)` 不该在文档里留下可执行的 href。
+   */
+  type?: "integer" | "token" | "boolean" | "url" | "string";
+  /** `url` 专用协议白名单，例如 `["https:", "http:"]`。缺省则拒绝一切 URL。 */
+  protocols?: readonly string[];
+  min?: number;
+  max?: number;
+  oneOf?: readonly string[];
+  default?: unknown;
+}
+
 export interface CoreAttrSpec {
   default?: unknown;
 }
@@ -356,10 +452,25 @@ export interface CoreNodeSpec {
   attrs?: Record<string, CoreAttrSpec>;
   parseDOM?: CoreTagParseRule[];
   toDOM?: (node: CoreNodeView) => DomOutputSpec;
+  /**
+   * Markdown 表达。和 `toDOM`/`parseDOM` 放在一起而不是集中到 Markdown 包里：
+   * 节点的每一种表达都该跟着节点定义走，否则新增一个节点要改两个包，
+   * 而漏改的那一个不会有任何报错（方案 §4.3）。缺省即"Markdown 表达不了"，
+   * 由序列化器按丢格式不丢内容降级。
+   */
+  toMarkdown?: CoreNodeToMarkdown;
+  fromMarkdown?: CoreMarkdownParseRule[];
 }
 
 export interface CoreMarkSpec {
   attrs?: Record<string, CoreAttrSpec>;
   parseDOM?: CoreParseRule[];
   toDOM?: (mark: CoreMarkView) => DomOutputSpec;
+  toMarkdown?: CoreMarkToMarkdown;
+  fromMarkdown?: CoreMarkdownParseRule[];
+  /**
+   * 标记内的文本是字面量，序列化时不做 Markdown 转义。行内代码就是这一类：
+   * 代码跨里没有反斜杠转义，`` `a \` b` `` 里的反斜杠是代码的一部分。
+   */
+  markdownLiteral?: boolean;
 }

@@ -1,0 +1,5 @@
+{
+  "text/html": "<meta charset='utf-8'><div class=\"article-body\" style=\"font-family: Georgia, serif; line-height: 1.7;\"><h2 class=\"headline\">季度回顾</h2><p>本季度<strong>营收</strong>同比增长，主要来自两条线：</p><ul class=\"bullets\"><li>企业版续约率提升</li><li>新市场首单落地</li></ul><figure class=\"media\"><img src=\"https://cdn.example.com/chart.png\" alt=\"营收曲线\"><figcaption>图 1：营收曲线</figcaption></figure><section class=\"appendix\"><h3>附注</h3><p>数据口径见财务说明。</p></section></div>",
+  "text/plain": "季度回顾\n本季度营收同比增长，主要来自两条线：\n企业版续约率提升\n新市场首单落地\n图 1：营收曲线\n附注\n数据口径见财务说明。",
+  "application/x-company-editor+json": ""
+}

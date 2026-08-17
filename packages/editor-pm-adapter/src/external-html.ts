@@ -63,11 +63,20 @@ function appendBlock(document: Document, parent: HTMLElement, node: Node, schema
     }
     return;
   }
-  if (tag === "p" || blockTags.has(tag)) {
+  if (tag === "p") {
     const paragraph = document.createElement("p");
     copyAlign(element, paragraph);
     appendInlineChildren(document, paragraph, element, schema);
     appendIfMeaningful(parent, paragraph);
+    return;
+  }
+  if (blockTags.has(tag)) {
+    // 容器透明：里面的块结构原样往上并，只有连续的行内内容才收成段落。
+    //
+    // 从前这里和 `p` 走同一条分支，把容器整个压成一个段落。真实网页复制出来的
+    // HTML 几乎总是裹着 `div` / `article` / `section`，于是标题、段落、列表全被
+    // 拼成一行——而 golden 语料里的样本恰好都没有外层容器，这条路径一直没人走到。
+    appendBlockChildren(document, parent, element, schema, element);
     return;
   }
   if (/^h[1-6]$/.test(tag)) {
@@ -192,11 +201,20 @@ function appendBlockChildren(
   parent: HTMLElement,
   source: Element,
   schema: Schema,
+  /** 容器上的对齐要传给它收出来的段落，否则 `<div style="text-align:center">` 的对齐会丢。 */
+  alignFrom?: Element,
 ): void {
-  let inline = document.createElement("p");
+  const newParagraph = (): HTMLElement => {
+    const paragraph = document.createElement("p");
+    if (alignFrom) {
+      copyAlign(alignFrom, paragraph);
+    }
+    return paragraph;
+  };
+  let inline = newParagraph();
   const flushInline = () => {
     appendIfMeaningful(parent, inline);
-    inline = document.createElement("p");
+    inline = newParagraph();
   };
   for (const child of Array.from(source.childNodes)) {
     if (child.nodeType === 1 && isBlockElement(child as Element)) {

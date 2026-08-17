@@ -8,7 +8,21 @@ import { parseExternalHTML } from "./external-html";
 import { buildSchema } from "./schema";
 
 const schema = sourceSchema();
-const sources = ["word", "excel", "web", "feishu", "notion", "wechat", "google-docs"] as const;
+/**
+ * `web-container` 是后补的一份：其余样本都是裸的 `<h2><p>`，而真实网页复制出来的
+ * HTML 几乎总是裹着 `div` / `section` / `figure`。少了它，"容器把内部块结构压平"
+ * 这条缺陷在整个 golden 语料里没有一处走得到——它确实在 S25 之前活了很久。
+ */
+const sources = [
+  "word",
+  "excel",
+  "web",
+  "web-container",
+  "feishu",
+  "notion",
+  "wechat",
+  "google-docs",
+] as const;
 
 describe("剪贴板来源 golden 语料库", () => {
   it.each(sources)("%s 的完整 MIME dump 解析结果保持稳定", async (source) => {

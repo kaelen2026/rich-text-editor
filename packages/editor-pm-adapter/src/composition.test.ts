@@ -40,8 +40,19 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+/**
+ * `compositionend` 之后队列不再同步冲刷：要等下一笔事务（真实浏览器里就是上屏
+ * 文本那一笔），一直没有则由 250ms 兜底。理由见 `session.ts` 的 `scheduleFlush`。
+ * jsdom 里造不出上屏那一笔，因此这些用例走兜底路径。
+ */
+function endComposition(host: HTMLElement): void {
+  compose(host, "compositionend");
+  vi.advanceTimersByTime(250);
+}
+
 describe("输入法组合态", () => {
   it("组合态挂起非用户文档事务，并在结束后映射冲刷", () => {
+    vi.useFakeTimers();
     const { host, session } = mountedSession();
     compose(host, "compositionstart");
 
@@ -52,19 +63,39 @@ describe("输入法组合态", () => {
       dispatch?.(state.tr.setSelection(TextSelection.create(state.doc, 1)));
       return true;
     }, true);
-    compose(host, "compositionend");
+    endComposition(host);
 
     expect(session.docJSON.content?.[0]?.content?.[0]?.text).toBe("程序化初始");
     expect(session.composing).toBe(false);
   });
 
+  it("组合结束后先到的那笔事务负责冲刷，不必等兜底超时", async () => {
+    vi.useFakeTimers();
+    const { host, session } = mountedSession();
+    compose(host, "compositionstart");
+    insert(session, "回填");
+
+    compose(host, "compositionend");
+    // 组合态标志立刻恢复，但队列还没落地——此刻模型可能还没追上 DOM。
+    expect(session.composing).toBe(false);
+    expect(session.docJSON.content?.[0]?.content?.[0]?.text).toBe("初始");
+
+    // 下一笔事务代表"模型已经追上"，冲刷随它一起发生，一个定时器都不用等；
+    // 但要等它自己走完（微任务），不能在它的调用栈里插队。
+    insert(session, "上屏");
+    await Promise.resolve();
+    // "回填"排队时记的位置是 1，被"上屏"往后推了两格——落在它后面才是映射对了。
+    expect(session.docJSON.content?.[0]?.content?.[0]?.text).toBe("上屏回填初始");
+  });
+
   it("按排队顺序冲刷多笔非用户事务", () => {
+    vi.useFakeTimers();
     const { host, session } = mountedSession();
     compose(host, "compositionstart");
 
     insert(session, "甲");
     insert(session, "乙");
-    compose(host, "compositionend");
+    endComposition(host);
 
     expect(session.docJSON.content?.[0]?.content?.[0]?.text).toBe("甲乙初始");
   });
@@ -80,8 +111,10 @@ describe("输入法组合态", () => {
     expect(session.composing).toBe(true);
 
     vi.advanceTimersByTime(1);
-    expect(session.docJSON.content?.[0]?.content?.[0]?.text).toBe("兜底初始");
     expect(session.composing).toBe(false);
+    // 五秒兜底退出组合态后，冲刷仍走 `scheduleFlush` 的那条延迟路径。
+    vi.advanceTimersByTime(250);
+    expect(session.docJSON.content?.[0]?.content?.[0]?.text).toBe("兜底初始");
   });
 });
 

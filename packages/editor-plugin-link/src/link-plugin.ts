@@ -1,7 +1,9 @@
 import type { EditorPlugin, SessionCommand } from "@kaelen/editor-runtime";
+import { escapeLinkDestination } from "@kaelen/editor-schema";
 
 const LINK_MARK = "co_link";
-const allowedProtocols = new Set(["https:", "http:", "mailto:", "tel:"]);
+const ALLOWED_PROTOCOLS = ["https:", "http:", "mailto:", "tel:"] as const;
+const allowedProtocols = new Set<string>(ALLOWED_PROTOCOLS);
 
 /** 首个可选插件：安全链接及其命令。 */
 export function createLinkPlugin(): EditorPlugin {
@@ -24,6 +26,25 @@ export function createLinkPlugin(): EditorPlugin {
             ? ["a", { href, rel: "noopener noreferrer" }, 0]
             : ["span", { "data-unsafe-link": "true" }, 0];
         },
+        // 同一条白名单第三次出现：导出也是一个把文档内容拼成可点击目标的地方。
+        // 过不了白名单就只写文字，不写链接语法。
+        toMarkdown: (mark, content) => {
+          const href = safeHref(mark.attrs.href);
+          return href ? `[${content}](${escapeLinkDestination(href)})` : content;
+        },
+        fromMarkdown: [
+          {
+            token: "link",
+            attrsFromToken: {
+              href: {
+                from: "attribute",
+                attribute: "href",
+                type: "url",
+                protocols: ALLOWED_PROTOCOLS,
+              },
+            },
+          },
+        ],
       });
     },
     registerCommands: (commands) => {
