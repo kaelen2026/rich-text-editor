@@ -138,6 +138,9 @@ importers:
       '@kaelen/editor-plugin-table':
         specifier: workspace:*
         version: link:../../packages/editor-plugin-table
+      '@kaelen/editor-plugin-version-history':
+        specifier: workspace:*
+        version: link:../../packages/editor-plugin-version-history
       '@kaelen/editor-pm-adapter':
         specifier: workspace:*
         version: link:../../packages/editor-pm-adapter

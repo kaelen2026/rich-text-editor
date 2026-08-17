@@ -6,6 +6,7 @@ import { createCommentPlugin } from "@kaelen/editor-plugin-comment";
 import { createImagePlugin } from "@kaelen/editor-plugin-image";
 import { createLinkPlugin } from "@kaelen/editor-plugin-link";
 import { createTablePlugin } from "@kaelen/editor-plugin-table";
+import { createVersionHistoryPlugin } from "@kaelen/editor-plugin-version-history";
 import type { CollabSessionOptions } from "@kaelen/editor-pm-adapter";
 import { applyDocumentPatch, buildSchema } from "@kaelen/editor-pm-adapter";
 import {
@@ -81,6 +82,7 @@ import { ColorPicker, type ColorPickerMenu } from "./color-picker";
 import { CommentPanel } from "./comment-panel";
 import { createE2EProbe, E2E_ENABLED, type E2EProbe, exposeE2EHooks } from "./e2e-hooks";
 import { ImageToolbar } from "./image-toolbar";
+import { VersionPanel } from "./version-panel";
 
 const STORAGE_KEY = "playground.document";
 
@@ -548,6 +550,7 @@ function bootEditor(faulty: boolean, document: EditorEnvelope): Boot {
       createColorPlugin(),
       createImagePlugin({ uploader: playgroundUploader }),
       createCommentPlugin(),
+      createVersionHistoryPlugin(),
       createAiPlugin({ service: ai.service }),
       ...(faulty ? FAULTY_PLUGINS : []),
       ...probe.plugins,
@@ -1056,6 +1059,7 @@ export function App() {
           </div>
         </div>
         <PatchPanel baseDocument={baseDocument} />
+        <VersionPanel baseDocument={baseDocument} />
         <MarkdownPanel />
         {saved ? (
           <details className="console">
