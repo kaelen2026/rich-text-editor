@@ -126,6 +126,9 @@ importers:
       '@kaelen/editor-plugin-color':
         specifier: workspace:*
         version: link:../../packages/editor-plugin-color
+      '@kaelen/editor-plugin-comment':
+        specifier: workspace:*
+        version: link:../../packages/editor-plugin-comment
       '@kaelen/editor-plugin-image':
         specifier: workspace:*
         version: link:../../packages/editor-plugin-image
@@ -280,6 +283,37 @@ importers:
       '@kaelen/editor-schema':
         specifier: workspace:*
         version: link:../editor-schema
+
+  packages/editor-plugin-comment:
+    dependencies:
+      '@kaelen/editor-pm-adapter':
+        specifier: workspace:*
+        version: link:../editor-pm-adapter
+      '@kaelen/editor-runtime':
+        specifier: workspace:*
+        version: link:../editor-runtime
+      '@kaelen/editor-schema':
+        specifier: workspace:*
+        version: link:../editor-schema
+      '@kaelen/editor-shared-types':
+        specifier: workspace:*
+        version: link:../editor-shared-types
+      prosemirror-state:
+        specifier: ^1.4.3
+        version: 1.4.4
+      prosemirror-transform:
+        specifier: ^1.10.4
+        version: 1.12.0
+      prosemirror-view:
+        specifier: ^1.41.4
+        version: 1.42.2
+    devDependencies:
+      '@kaelen/editor-api':
+        specifier: workspace:*
+        version: link:../editor-api
+      '@kaelen/editor-collab':
+        specifier: workspace:*
+        version: link:../editor-collab
 
   packages/editor-plugin-image:
     dependencies:

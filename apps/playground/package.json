@@ -14,6 +14,7 @@
     "@kaelen/editor-markdown": "workspace:*",
     "@kaelen/editor-plugin-ai": "workspace:*",
     "@kaelen/editor-plugin-color": "workspace:*",
+    "@kaelen/editor-plugin-comment": "workspace:*",
     "@kaelen/editor-plugin-image": "workspace:*",
     "@kaelen/editor-plugin-link": "workspace:*",
     "@kaelen/editor-plugin-table": "workspace:*",

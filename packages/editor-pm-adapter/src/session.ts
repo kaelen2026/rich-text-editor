@@ -1,5 +1,6 @@
 import type { BlockAlign } from "@kaelen/editor-schema";
 import {
+  type Annotation,
   type CollabRejection,
   type CollabState,
   DOCUMENT_NODE_LIMIT,
@@ -62,6 +63,13 @@ export interface SessionExtension {
   bind?(bridge: SessionBridge): void;
   unmount?(): void;
   destroy?(): void;
+  /**
+   * 实现这两个方法的扩展成为信封 `annotations` 字段的运行时权威（方案 §9.8）：
+   * 装载文档时接收信封里的批注，取回文档时交出当前批注。最多一个扩展实现；
+   * 没有实现者时批注由 runtime 原样透传。
+   */
+  loadAnnotations?(annotations: readonly Annotation[]): void;
+  annotations?(): readonly Annotation[];
 }
 
 /** 能力插件需要的最小会话能力，异步结果可通过它安全回到唯一事务入口。 */
