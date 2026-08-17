@@ -258,6 +258,24 @@ describe("协同会话", () => {
     });
   });
 
+  it("试跑撤销只回答能不能，不真的撤销", async () => {
+    const room = createRoom();
+    const peer = join(room);
+    await vi.waitFor(() => expect(peer.session.collabBound).toBe(true));
+    insertText(peer, "写了一句。");
+    await vi.waitFor(() => expect(text(peer)).toBe("写了一句。"));
+
+    // 工具栏每渲染一帧都会这样问一次可用性。y-prosemirror 的 `undo` 无视
+    // dispatch、一调用就真撤销，用错那一个等于每帧撤销一次。
+    for (let i = 0; i < 5; i += 1) {
+      expect(peer.session.applyHistoryCommand("undo", false)).toBe(true);
+    }
+    expect(text(peer)).toBe("写了一句。");
+
+    expect(peer.session.applyHistoryCommand("undo", true)).toBe(true);
+    await vi.waitFor(() => expect(text(peer)).toBe(""));
+  });
+
   it("组合态期间远端改动不落地，组合结束后一次到位", async () => {
     const room = createRoom();
     const left = join(room, tableSchema, "左");

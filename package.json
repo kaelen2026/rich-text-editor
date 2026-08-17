@@ -23,6 +23,7 @@
     "e2e": "playwright test",
     "bench": "tsx scripts/benchmark.ts",
     "demo:remote-image-service": "pnpm --filter @kaelen/remote-image-service-demo dev",
+    "demo:collab-server": "pnpm --filter @kaelen/collab-server-demo dev",
     "render": "tsx scripts/render.ts",
     "dev": "pnpm --filter @kaelen/playground dev",
     "prepare": "husky",

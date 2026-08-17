@@ -14,9 +14,9 @@ import type { Schema } from "prosemirror-model";
 import type { Command, Plugin } from "prosemirror-state";
 import {
   yCursorPlugin,
-  redo as yRedo,
+  redoCommand as yRedoCommand,
   ySyncPlugin,
-  undo as yUndo,
+  undoCommand as yUndoCommand,
   yUndoPlugin,
 } from "y-prosemirror";
 
@@ -26,8 +26,19 @@ export interface HistoryCommands {
   redo: Command;
 }
 
-/** 协同下由 `Y.UndoManager` 接管：只回退自己的改动，不动别人的。 */
-export const collabHistoryCommands: HistoryCommands = { undo: yUndo, redo: yRedo };
+/**
+ * 协同下由 `Y.UndoManager` 接管：只回退自己的改动，不动别人的。
+ *
+ * 必须用 `undoCommand` / `redoCommand`，不能用同一个包里那对 `undo` / `redo`：
+ * 后者**无视 `dispatch`，一调用就真的撤销**。而工具栏每次渲染都会用
+ * `dispatch == null` 的试跑去问"这条命令现在能不能用"——用错那一对，等于每渲染
+ * 一帧撤销一次，页面当场卡死。这一条是真实浏览器用例逼出来的，jsdom 里没有
+ * 会反复重渲染的工具栏，看不见。
+ */
+export const collabHistoryCommands: HistoryCommands = {
+  undo: (state, dispatch, view) => yUndoCommand(state, dispatch, view) === true,
+  redo: (state, dispatch, view) => yRedoCommand(state, dispatch, view) === true,
+};
 
 export interface CollabSessionOptions {
   provider: CollabProvider;
