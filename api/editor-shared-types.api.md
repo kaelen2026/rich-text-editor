@@ -518,3 +518,21 @@ interface SliceJSON {
   openEnd: number;
 }
 ```
+
+```ts
+interface VersionLog {
+  v: 1;
+  /** 基线文档与它的修订号。日志只能回答基线之后的版本。 */
+  baseRevision: number;
+  baseDoc: NodeJSON;
+  entries: VersionLogEntry[];
+}
+```
+
+```ts
+interface VersionLogEntry {
+  patch: DocumentPatch;
+  /** 宿主的版本元数据（时间、作者、标签）。编辑器不生成也不解释它。 */
+  meta?: unknown;
+}
+```
