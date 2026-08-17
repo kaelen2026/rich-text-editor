@@ -66,7 +66,8 @@
 ### 4.2 扩展内容
 
 - 表格：插入、增删行列、合并单元格（保留 `colspan`/`rowspan`）、复制粘贴表格、键盘导航（见 §15）。
-- 图片：本地选择、拖入、剪贴板粘贴、上传状态、失败重试。
+- 图片：本地选择、拖入、剪贴板粘贴、上传状态、失败重试；以及非破坏性的二次编辑（尺寸、裁剪、旋转、滤镜、环绕、替代文本、替换资产）。
+- 文字颜色与背景色：由插件贡献 `co_text_color` / `co_background_color` 两个标记。它们是可选能力而非核心集，因此卸载插件后按 §9.3 丢标记保文本。
 - 代码块：指定语言；粘贴进代码块时一律按纯文本处理。
 - 可扩展：@ 提及、附件、公式、嵌入卡片、任务块。
 
@@ -132,25 +133,29 @@
 业务应用（React / Vue）
         │
         ▼
-@company/editor-react / @company/editor-vue        框架适配：挂载、订阅、渲染
+@kaelen/editor-react / @kaelen/editor-vue         框架适配：挂载、订阅、渲染
         │
-        ├──▶ @company/editor-react-ui / -vue-ui     仅渲染
+        ├──▶ @kaelen/editor-react-ui / -vue-ui     仅渲染
         │            │
         │            ▼
-        │    @company/editor-ui-model               工具栏/浮层状态机（无框架）
+        │    @kaelen/editor-ui-model               工具栏/浮层状态机（无框架）
         ▼
-@company/editor-api                                稳定的业务接入接口
+@kaelen/editor-api                                稳定的业务接入接口
         │
         ▼
-@company/editor-runtime                            插件调度、命令、事件、剪贴板管线、位置映射
+@kaelen/editor-runtime                            插件调度、命令、事件、自动保存、熔断
         │
-        ├──▶ @company/editor-schema                 核心 Schema + serializer（前后端共用，无 DOM 依赖）
+        ├──▶ @kaelen/editor-schema                 核心 Schema + serializer（前后端共用，无 DOM 依赖）
         ▼
-@company/editor-pm-adapter                         Schema 装配、EditorState、Transaction、EditorView
-        │
+@kaelen/editor-pm-adapter                         Schema 装配、EditorState、Transaction、EditorView、
+        │                                          剪贴板管线、外部 HTML 解析、位置映射
         ▼
 ProseMirror
 ```
+
+包名前缀是 `@kaelen/`，所有包当前均为 `private: true` 的 workspace 内部包，尚未发布到 registry。
+
+剪贴板管线与位置映射落在 `editor-pm-adapter` 而不是 `editor-runtime`：两者都要直接操作 `Slice`、`Transaction` 和 `Mapping`，放在 runtime 会让 runtime 重新长出 ProseMirror 依赖，§7.1 的分层约束就白设了。
 
 Tiptap 可用于原型开发、借鉴 Extension 实现或快速引入成熟能力，但不作为业务层直接依赖，也不应将其 React/Vue 包作为平台内核。
 
@@ -160,22 +165,31 @@ Tiptap 可用于原型开发、借鉴 Extension 实现或快速引入成熟能�
 
 ```text
 packages/
-  editor-shared-types/        # 共享类型与协议（含 DocumentPatch、Envelope）
-  editor-schema/              # 核心 NodeSpec/MarkSpec + DOMOutputSpec→HTML serializer（无 DOM 依赖，前后端共用）
-  editor-api/                 # 面向业务的稳定类型和接口
-  editor-runtime/             # 插件运行时、命令、事件、配置、位置映射、组合态调度
-  editor-pm-adapter/          # ProseMirror 实现适配
-  editor-plugin-basic/        # 基础块与文本样式的命令、快捷键、输入规则（Schema 在 editor-schema）
-  editor-plugin-table/        # 表格
-  editor-plugin-image/        # 图片、上传协议
-  editor-plugin-clipboard/    # 复制、粘贴、HTML 解析
-  editor-plugin-link/         # 链接与链接卡片
-  editor-ui-model/            # 工具栏/浮层状态机（无框架）
-  editor-react/               # React Provider、Hooks、内容容器
-  editor-react-ui/            # React 工具栏/浮层渲染
-  editor-vue/                 # Vue Provider、Composables、内容容器
-  editor-vue-ui/              # Vue 工具栏/浮层渲染
+  editor-shared-types/          # 共享类型与协议（Envelope、DocumentPatch、事件、CoreNodeSpec）。零依赖
+  editor-schema/                # 冻结核心 NodeSpec/MarkSpec + 信封 + 迁移链 + DOMOutputSpec→HTML serializer
+  editor-pm-adapter/            # ProseMirror 适配：Schema 装配、Session、核心命令、剪贴板、外部 HTML、Patch 转换
+  editor-runtime/               # 插件解析与降级、命令分发、事件、自动保存、熔断
+  editor-api/                   # 面向业务的稳定接口 createEditor / RichEditor
+  editor-plugin-link/           # co_link 与协议白名单
+  editor-plugin-table/          # co_table 系列节点与表格命令
+  editor-plugin-image/          # co_image、AssetUploader、上传态 Decoration、二次编辑属性
+  editor-plugin-color/          # co_text_color / co_background_color 两个标记
+  editor-remote-image-service/  # 远端图片转存策略与 SSRF 控制（可替换服务契约，无 DOM 依赖）
+  editor-ui-model/              # 工具栏状态机与浮动工具栏定位（无框架）
+  editor-react/                 # React Provider、Hooks、内容容器
+  editor-react-ui/              # React 工具栏渲染
+  editor-vue/                   # Vue Provider、Composables、内容容器
+  editor-vue-ui/                # Vue 工具栏渲染
+
+apps/
+  playground/                   # 每一片的演示场地（React）
+  remote-image-service/         # 远端图片转存的 Node 演示服务
 ```
+
+两处与早期规划不同，都是刻意的：
+
+- **没有 `editor-plugin-basic`。** 基础块与文本样式属于冻结核心集，Schema 在 `editor-schema`、命令与快捷键在 `editor-pm-adapter` 的核心命令表。把它们做成插件等于让"能被卸载"这件事发生在核心集上，与 §9.2 的冻结承诺矛盾。
+- **没有 `editor-plugin-clipboard`。** 复制粘贴要直接操作 `Slice`/`Transaction`，且核心块本身就需要复制粘贴；它是内核能力而不是可选能力，因此落在 `editor-pm-adapter`（`clipboard.ts`、`external-html.ts`）。
 
 ### 7.1 分层约束
 
@@ -210,13 +224,22 @@ export interface RichEditor {
   /** 工具栏所需状态：能否执行、当前是否生效。 */
   queryCommand(command: string, input?: unknown): CommandQuery
 
-  // ---- 选区与状态 ----
+  // ---- 三态与选区 ----
+  /** 编辑态 / 只读态 / 禁用态，语义不同，不能用一个布尔量表达（§4.1）。 */
+  getMode(): EditorMode
+  setMode(mode: EditorMode): void
   getSelectionState(): SelectionSnapshot
+
+  // ---- 状态 ----
   /** 引用稳定的状态快照，供 useSyncExternalStore / Vue computed 使用（见 §10.2）。 */
   getSnapshot(): EditorSnapshot
   isDirty(): boolean
+  /** 宿主完成持久化后调用，清除脏标记且不影响撤销历史。 */
+  markSaved(): void
   /** 单调递增修订号，用于自动保存与冲突检测。 */
   getRevision(): number
+  /** 已发生的插件降级记录，含宿主能订阅之前的启动期冲突（§8.3、§8.6）。 */
+  getPluginErrors(): readonly PluginError[]
 
   focus(): void
   undo(): CommandResult
@@ -228,7 +251,10 @@ export interface RichEditor {
   destroy(): void
 
   // ---- 事件 ----
-  subscribe<K extends EditorEventName>(event: K, listener: (e: EditorEventMap[K]) => void): () => void
+  subscribe<K extends EditorEventName>(
+    event: K,
+    listener: (payload: EditorEventPayload[K]) => void,
+  ): () => void
 }
 
 export interface CommandResult {
@@ -260,7 +286,9 @@ export interface SelectionSnapshot {
 
 - `getDocument()` 按状态缓存。它是 JSON 兼容的只读快照（因 §7.1 不暴露 `Node`），调用方必须自行克隆后再改写；频繁保存改走 §8.4 的增量 patch。
 - `getSnapshot()` 的返回值必须引用稳定（同一状态返回同一对象）。React 18 的 `useSyncExternalStore` 要求 `getSnapshot` 可缓存，每次返回新对象会直接抛 `The result of getSnapshot should be cached`。
-- `queryCommand` 的存在是为了让工具栏不必调用 `getDocument()`。缺少 `active` 会迫使 UI 每次 `selectionChanged` 全量序列化文档。
+- `queryCommand` 的存在是为了让工具栏不必调用 `getDocument()`。缺少 `active` 会迫使 UI 每次选区变化就全量序列化文档。
+- `isDirty()` 只读不写，脏标记的清除必须由宿主显式 `markSaved()`。编辑器不知道宿主什么时候把内容落了盘，替它猜就会在保存失败时把脏标记也一起丢掉。
+- `getPluginErrors()` 与 `subscribe('pluginError')` 并存，因为启动期的插件冲突发生在宿主拿到实例、能订阅之前。只有事件的话，这批错误谁也看不到。它在没有新记录时返回同一引用，可直接喂给 `useSyncExternalStore`。
 
 ### 8.2 生命周期规则
 
@@ -272,28 +300,42 @@ export interface SelectionSnapshot {
 
 ### 8.3 插件接口
 
+当前已实现的插件契约（`@kaelen/editor-runtime`）：
+
 ```ts
 export interface EditorPlugin {
   name: string
   version: string
-  /** 该插件贡献的持久化节点/标记名前缀，必须符合 §9.2 命名空间规则。 */
-  namespace: string
+  /** 持久化节点/标记名的全局前缀。类型即约束：当前只允许 `co_`（§9.2）。 */
+  namespace: 'co_'
+  /**
+   * 该插件贡献的**文档结构**版本，写进信封的 `plugins`。与包的 semver `version`
+   * 不同：它是持久化数据的版本，由插件自己的迁移函数推进。
+   */
+  structureVersion?: number
   dependsOn?: string[]
 
   extendSchema?(schema: SchemaBuilder): void
   registerCommands?(commands: CommandRegistry): void
-  registerShortcuts?(shortcuts: ShortcutRegistry): void
-  registerClipboard?(clipboard: ClipboardPipeline): void
-  registerNodeViews?(views: NodeViewRegistry): void
-  /** 文档 schemaVersion 升级时的迁移函数，仅处理本插件拥有的节点。 */
-  registerMigrations?(migrations: MigrationRegistry): void
-
-  onCreate?(editor: RichEditor): void
-  onDestroy?(editor: RichEditor): void
-  /** 组合态开始/结束通知，插件在组合态期间不得改动文档（§9.6）。 */
-  onCompositionChange?(composing: boolean): void
+  /**
+   * 需要 Decoration、位置 mapping 等 ProseMirror 状态的能力（如图片上传态）由此接入。
+   * 桥接类型止于 adapter 与插件层，业务侧 API 不会因此拿到 ProseMirror 对象（§7.1）。
+   */
+  createSessionExtensions?(): readonly SessionExtension[]
 }
 ```
+
+`namespace` 写成字面量类型 `'co_'` 而不是 `string`，是因为它本来就只有一个合法取值：允许插件自选前缀等于允许它自选一个未来会和别人撞车的命名空间，而撞车的代价是全量数据迁移（§9.2）。类型层挡住比启动期报错更早。
+
+尚未实现、仍在契约规划中的钩子（当前由核心承担或尚无消费者，实现时按此形状补）：
+
+| 规划中的钩子 | 现状 |
+| --- | --- |
+| `registerShortcuts` | 快捷键目前由 `editor-pm-adapter` 的核心 keymap 统一注册，插件命令经命令名接入。 |
+| `registerClipboard` | 剪贴板管线是内核能力（§7），插件暂不注入自定义规则。 |
+| `registerNodeViews` | 当前尚无自定义 NodeView：图片上传态用 Decoration 表达（§8.5）。 |
+| `registerMigrations` | 迁移链已实现，但目前经 `createEditor({ migrations })` 由宿主传入，尚未开放给插件自持。 |
+| `onCreate` / `onDestroy` / `onCompositionChange` | 组合态已由 runtime 全局把关（§9.6），插件暂无需要感知它的能力。 |
 
 命名规则区分两类名字：
 
@@ -421,7 +463,7 @@ export interface UploadedAsset {
 - `editor-schema` 拥有一个**冻结的、不带前缀**的核心集，永不新增、永不改名：
   `doc`、`text`、`paragraph`、`heading`、`blockquote`、`horizontal_rule`、`bullet_list`、`ordered_list`、`list_item`、`task_list`、`task_item`、`code_block`、`hard_break`、`unknown_block`、`unknown_inline`；
   标记：`strong`、`em`、`underline`、`strikethrough`、`code`。
-- **其余一切由插件贡献的节点/标记必须带 `co_` 前缀**：`co_table`、`co_table_row`、`co_table_cell`、`co_image`、`co_link`、`co_mention`、`co_embed`。不区分第一方与第三方——"第一方"不是稳定分类。
+- **其余一切由插件贡献的节点/标记必须带 `co_` 前缀**。不区分第一方与第三方——"第一方"不是稳定分类。当前已落库的名字：节点 `co_table`、`co_table_row`、`co_table_cell`、`co_table_header`、`co_image`；标记 `co_link`、`co_text_color`、`co_background_color`。规划中的 `co_mention`、`co_embed` 等沿用同一规则。
 - 属性名同样带前缀或收在插件自有属性对象内。
 - 以启动期校验强制：注册非冻结集且无合法前缀的名字即禁用该插件并报错。
 
@@ -456,15 +498,24 @@ unknown_inline: { group: 'inline', inline: true, atom: true, attrs: { original: 
 
 `editor-pm-adapter` 负责创建 `EditorState` 与 `EditorView`，处理 Transaction，并转换为稳定领域事件：
 
-| 事件 | 说明 |
-| --- | --- |
-| `contentChanged` | 文档内容变化（含 revision）。 |
-| `selectionChanged` | 选区变化。 |
-| `patch` | 增量变更（§8.4），供保存/协同/评论消费。 |
-| `compositionChanged` | 输入法组合态开始/结束（§9.6）。 |
-| `uploadStateChanged` | 上传态变化（来自 plugin state，不是文档变化）。 |
-| `pluginError` | 插件异常与熔断（§8.6）。 |
-| `documentDegraded` | 加载时出现未知节点（§9.3）。 |
+当前实际派发的事件（`EditorEventName`，载荷见 `EditorEventPayload`）：
+
+| 事件 | 载荷 | 说明 |
+| --- | --- | --- |
+| `change` | — | 任意状态变化，含内容与选区。订阅者用 `getSnapshot()` 区分：`revision` 只在内容变更时递增，`stateRevision` 每次都递增。 |
+| `patch` | `DocumentPatch` | 增量变更（§8.4），供保存/协同/评论消费。每个内容事务一条。 |
+| `compositionChanged` | `boolean` | 输入法组合态开始/结束（§9.6）。 |
+| `documentDegraded` | — | 加载时出现未知节点或被丢弃的未知标记（§9.3）。 |
+| `pluginError` | `PluginError` | 插件冲突降级与运行期熔断（§8.3、§8.6）。 |
+| `clipboardNotice` | `ClipboardNotice` | 粘贴内容被安全或规模策略拒绝、截断（§11.4、§14.2）。 |
+| `limitExceeded` | `DocumentLimitNotice` | 一次被文档规模上限挡下的写入，文档保持在被拒绝之前的状态（§14.2）。 |
+
+四处与早期规划不同：
+
+- **`change` 一个事件覆盖内容与选区**，而不是 `contentChanged` / `selectionChanged` 两个。UI 侧真正需要的是"状态变了，重算派生值"，而 `getSnapshot()` 的两个修订号已经把内容变更与选区变更区分开了；派两个事件只会让订阅方两边都订，然后重算两次。
+- **没有 `uploadStateChanged`。** 上传态是图片插件的 plugin state + Decoration（§8.5），不是编辑器状态；把它抬到公共事件面上等于让每个宿主都要认识一个只有一个插件才关心的概念。
+- **多出 `clipboardNotice`。** 粘贴被拒绝或截断必须让用户看得见，否则"降级不丢内容"这条承诺在用户眼里就是内容凭空少了一块。
+- **多出 `limitExceeded`。** 同理：规模上限挡下一次写入时，用户看到的是"刚才那下没生效"。不说原因，它和一个 bug 无法区分。
 
 业务不得直接分发 ProseMirror Transaction；所有业务操作经由命令执行。
 
@@ -741,15 +792,21 @@ clipboardData.setData('application/x-company-editor+json', JSON.stringify(payloa
 
 ### 14.2 硬上限
 
-| 项 | 上限 | 超出行为 |
-| --- | --- | --- |
-| 文档节点数 | 20,000 | 拒绝插入并提示 |
-| 文档 JSON 大小 | 2MB | 拒绝保存并提示 |
-| 单次粘贴 HTML 大小 | 2MB | 截断并提示，或降级纯文本 |
-| 单次粘贴文件数 | 20 | 超出部分忽略并提示 |
-| 单图大小 | 10MB | 拒绝并提示 |
-| 表格单表单元格数 | 5,000 | 拒绝插入/粘贴并提示 |
-| `colspan`/`rowspan` 数值 | 1,000 | 钳制 |
+| 项 | 上限 | 超出行为 | 执行点 |
+| --- | --- | --- | --- |
+| 文档节点数 | 20,000 | 拒绝插入并提示 | `EditorSession` 的唯一事务入口，发 `limitExceeded` |
+| 文档 JSON 大小 | 2MB | 拒绝保存并提示 | **宿主**，保存前用 `getDocumentSize()` 判定 |
+| 单次粘贴 HTML 大小 | 2MB | 截断并提示，或降级纯文本 | 剪贴板管线，发 `clipboardNotice: html-too-large` |
+| 单次粘贴文件数 | 20 | 超出部分忽略并提示 | 剪贴板管线，发 `clipboardNotice: file-limit` |
+| 单图大小 | 10MB | 拒绝并提示 | 剪贴板管线，发 `clipboardNotice: image-too-large` |
+| 表格单表单元格数 | 5,000 | 粘贴降级为纯文本并提示；插入直接拒绝 | 粘贴侧发 `clipboardNotice: table-limit`；`table.insert` 返回 `ok:false` |
+| `colspan`/`rowspan` 数值 | 1,000 | 钳制 | 外部 HTML 解析时钳制，不提示 |
+
+节点数与字节数的执行点刻意不同：节点数是编辑器能拦的，放在唯一事务入口，打字、粘贴、拖入、插件回填因此受同一条规则约束；字节数是宿主才能拦的，保存是宿主的动作，编辑器无从代它拒绝，只能给出可判定的事实。
+
+**两者都只拦新写入，不拦装载。** 已经超限的历史文档必须打得开，否则超限本身就成了丢内容的方式——这与 §9.3 对缺插件的立场是同一条。
+
+节点计数落在按键路径上，因此不做全文遍历：会话维护一个只增的保守上界，每个事务加上它写入的节点数，只有上界触到硬上限时才精确重算一次并把上界收回真实值。打字是 O(1)。
 
 ---
 

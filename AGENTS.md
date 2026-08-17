@@ -1,5 +1,7 @@
 # Repository Guidelines
 
+New here? Read `README.md` first for what this project is, how to run it, and the package map.
+
 ## Branch and PR workflow
 
 - `main` is a protected integration branch. Do not commit, merge, force-push, or push directly to it.
