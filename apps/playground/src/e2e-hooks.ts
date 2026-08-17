@@ -1,4 +1,5 @@
 import type { RichEditor } from "@kaelen/editor-api";
+import type { AiResult } from "@kaelen/editor-plugin-ai";
 import type { SessionBridge, SessionExtension } from "@kaelen/editor-pm-adapter";
 import type { EditorPlugin } from "@kaelen/editor-runtime";
 import { Plugin, PluginKey } from "prosemirror-state";
@@ -27,6 +28,13 @@ export interface E2EHooks {
    * `execute()` 走的是第 5 条（直接拒绝）。
    */
   dispatchProgrammaticInsert(text: string): void;
+  /**
+   * 兑现最早那个待决的 AI 请求。
+   *
+   * `?e2e=1` 下 playground 的模拟服务不再自己走定时器：用例要断言的是"结果在
+   * 组合态的哪一刻到达"，而那一刻必须由用例说了算。
+   */
+  settleAi(result: AiResult): boolean;
 }
 
 declare global {
@@ -101,12 +109,17 @@ export function createE2EProbe(): E2EProbe {
   return { plugins: [plugin], bridge: () => bridge };
 }
 
-export function exposeE2EHooks(editor: RichEditor, probe: E2EProbe): void {
+export function exposeE2EHooks(
+  editor: RichEditor,
+  probe: E2EProbe,
+  settleAi: (result: AiResult) => boolean,
+): void {
   if (!E2E_ENABLED) {
     return;
   }
   window.__editorE2E = {
     editor,
+    settleAi,
     dispatchProgrammaticInsert(text) {
       const bridge = probe.bridge();
       if (!bridge) {
