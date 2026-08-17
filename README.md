@@ -41,7 +41,7 @@ pnpm test
 | `pnpm lint:deps` | 包间依赖方向：越层、幽灵依赖、核心包引入框架，任一即失败 |
 | `pnpm typecheck` | 全仓库 `tsc --noEmit` |
 | `pnpm test` / `pnpm test:watch` | Vitest |
-| `pnpm e2e` | Playwright 真实浏览器验收：输入法组合态（CDP）、粘贴解析阶段的网络请求数、协同（两个浏览器上下文 + 真实 WebSocket + 真实断网重连）。首次运行前跑一次 `pnpm exec playwright install chromium` |
+| `pnpm e2e` | Playwright 真实浏览器验收：输入法组合态（CDP）、粘贴解析阶段的网络请求数、协同（两个浏览器上下文 + 真实 WebSocket + 真实断网重连）、AI 回填在组合态下的挂起与重映射。首次运行前跑一次 `pnpm exec playwright install chromium` |
 | `pnpm bench` | 性能基准与预算门禁，超预算即失败（见 [`docs/performance-budgets.md`](docs/performance-budgets.md)） |
 | `pnpm render <doc.json> [--format html\|markdown]` | 纯 Node 环境从文档 JSON 渲染 HTML 或 Markdown，**不需要 jsdom** |
 | `pnpm demo:remote-image-service` | 启动远端图片转存的本地演示服务 |
@@ -49,7 +49,7 @@ pnpm test
 
 CI 的 `Quality` 检查按顺序跑 `check` → `typecheck` → `test` → `e2e` → `bench` → commitlint。
 
-`e2e/` 只放 jsdom 证明不了的东西，不做第二套功能回归：输入法组合态需要真实的 IME 事件时序，"inert 解析不发网络请求"需要真实浏览器才有网络栈可数，协同需要两个真实上下文与一条真的能被拔掉的 WebSocket。
+`e2e/` 只放 jsdom 证明不了的东西，不做第二套功能回归：输入法组合态需要真实的 IME 事件时序，"inert 解析不发网络请求"需要真实浏览器才有网络栈可数，协同需要两个真实上下文与一条真的能被拔掉的 WebSocket，而异步回填在组合态下是否真的被挂起，jsdom 里没有"从 DOM 读回模型"这一步，看上去永远是对的。
 
 ## 用起来长什么样
 
@@ -137,6 +137,7 @@ ProseMirror
 | `editor-runtime` | 插件拓扑排序与冲突降级、命令门禁、事件派发、自动保存、熔断 |
 | `editor-api` | 面向业务的窄接口，**刻意不暴露任何 ProseMirror 类型** |
 | `editor-plugin-{link,table,image,color}` | 可选能力，贡献 `co_` 前缀的节点与标记 |
+| `editor-plugin-ai` | 改写 / 续写 / 摘要。只定义宿主注入的 `AiService` 契约，不认识任何厂商、不发网络请求；不贡献任何节点或标记 |
 | `editor-remote-image-service` | 远端图片转存策略与 SSRF 控制，可替换的服务契约 |
 | `editor-collab` | 协同传输：可替换的 `CollabProvider` 契约、一个 WebSocket 实现、服务端房间逻辑。认识 Yjs，不认识 ProseMirror |
 | `editor-ui-model` | 工具栏行为状态机与浮动工具栏定位，无框架 |
