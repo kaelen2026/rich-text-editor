@@ -227,6 +227,9 @@
       },
       {
         "type": "code_block",
+        "attrs": {
+          "language": null
+        },
         "content": [
           {
             "type": "text",

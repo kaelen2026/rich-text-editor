@@ -105,6 +105,10 @@ function appendBlock(document: Document, parent: HTMLElement, node: Node, schema
   }
   if (tag === "pre") {
     const pre = document.createElement("pre");
+    const language = externalLanguage(element);
+    if (language) {
+      pre.setAttribute("data-language", language);
+    }
     pre.textContent = safeTextContent(element);
     appendIfMeaningful(parent, pre);
     return;
@@ -311,6 +315,43 @@ function copyAlign(source: Element, target: HTMLElement): void {
     target.setAttribute("data-align", align);
   }
 }
+
+/**
+ * 从外部代码块里认出语言。高亮器把它写在三个地方：`pre` 自己的 class、
+ * `pre` 的 `data-language`，以及最常见的——内层 `code` 的 class（GitHub、
+ * Prism、highlight.js 都是这个形状）。Schema 的解析规则只看元素自身，
+ * 因此在这条重建管线里把语言提到 `pre` 上，让白名单化的值成为唯一入口。
+ */
+function externalLanguage(source: Element): string | null {
+  const code = source.querySelector("code");
+  const candidates = [
+    source.getAttribute("data-language"),
+    source.getAttribute("data-lang"),
+    ...classLanguages(source),
+    ...classLanguages(code),
+  ];
+  for (const candidate of candidates) {
+    const language = candidate?.trim().toLowerCase();
+    if (language && externalLanguagePattern.test(language)) {
+      return language;
+    }
+  }
+  return null;
+}
+
+function classLanguages(element: Element | null): string[] {
+  const raw = element?.getAttribute("class");
+  if (!raw) {
+    return [];
+  }
+  return raw
+    .split(/\s+/)
+    .filter((token) => token.startsWith("language-") || token.startsWith("lang-"))
+    .map((token) => token.slice(token.indexOf("-") + 1));
+}
+
+/** 与 Schema 的语言白名单同一套字符集。 */
+const externalLanguagePattern = /^[a-z][a-z0-9+#._-]{0,31}$/;
 
 /** 用 Map 而不是对象字面量：`align="constructor"` 不该查出一个原型上的值。 */
 const externalAlignments = new Map([

@@ -280,9 +280,19 @@ export interface CoreStyleParseRule {
 /** DOM 属性的声明式读取与规范化规则。 */
 export interface CoreDOMAttributeRule {
   attribute: string;
-  type?: "integer";
+  /**
+   * `token` 只接受标识符字符（首位字母，其余 `a-z0-9+#._-`，最长 32），
+   * 用于取值开放、枚举不完的属性：语言名一类的值会进 `class`，放行任意
+   * 字符串等于让文档内容决定标签结构。
+   */
+  type?: "integer" | "token";
   min?: number;
   max?: number;
+  /**
+   * `token` 专用：属性值按空白拆成列表，取第一个带此前缀的项并去掉前缀。
+   * `class="highlight language-ts"` 因此读作 `ts`。
+   */
+  prefix?: string;
   /**
    * 取值白名单。DOM 上的字符串会被原样写进文档属性，再由 `toDOM` 拼进 HTML；
    * 少了白名单，一份手写的 `data-align="x;background:url(…)"` 就能顺着解析

@@ -10,7 +10,14 @@ import { type MarkType, Node as ProseMirrorNode, type Schema } from "prosemirror
 import { type Command, EditorState, type Plugin, type Transaction } from "prosemirror-state";
 import { Mapping } from "prosemirror-transform";
 import { type DirectEditorProps, EditorView } from "prosemirror-view";
-import { isBlockAligned, isBlockOfType, isCheckedTaskItem, isWithinNode } from "./block-commands";
+import {
+  hasLanguageBlock,
+  isBlockAligned,
+  isBlockOfType,
+  isCheckedTaskItem,
+  isCodeLanguageActive,
+  isWithinNode,
+} from "./block-commands";
 import {
   type ClipboardNotice,
   type ClipboardPayloadMeta,
@@ -312,6 +319,16 @@ export class EditorSession {
   /** 选区内可对齐的文本块是否都是该对齐。 */
   isAligned(align: BlockAlign | null): boolean {
     return isBlockAligned(this.state, align);
+  }
+
+  /** 选区内是否有可指定语言的代码块。 */
+  hasCodeLanguage(): boolean {
+    return hasLanguageBlock(this.state);
+  }
+
+  /** 选区内的代码块是否都是该语言。 */
+  isCodeLanguage(language: string | null): boolean {
+    return isCodeLanguageActive(this.state, language);
   }
 
   /** 选区是否位于某个结构容器（引用、列表）之内。 */

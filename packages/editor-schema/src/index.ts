@@ -6,6 +6,7 @@ export {
   coreNodes,
   type HeadingLevel,
   isBlockAlign,
+  isCodeLanguage,
   isHeadingLevel,
   MAX_HEADING_LEVEL,
   UNKNOWN_BLOCK,

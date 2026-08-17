@@ -23,6 +23,7 @@ import type { ToolbarDefinition } from "@kaelen/editor-ui-model";
 import {
   Baseline,
   Bold,
+  Braces,
   ChevronDown,
   ChevronRight,
   Code,
@@ -203,6 +204,30 @@ const TOOLBAR_MENUS: Record<string, readonly MenuEntry[]> = {
       shortcut: "Mod-Shift-J",
     },
   ],
+  // 语言是开放集合，这里只列常见几种；命令本身接受任何合法标识符。
+  "code-language": [
+    { id: "lang-none", label: "无语言", command: "block.setCodeBlockLanguage", input: null },
+    ...(
+      [
+        ["typescript", "TypeScript"],
+        ["javascript", "JavaScript"],
+        ["python", "Python"],
+        ["rust", "Rust"],
+        ["go", "Go"],
+        ["java", "Java"],
+        ["sql", "SQL"],
+        ["bash", "Bash"],
+        ["json", "JSON"],
+        ["html", "HTML"],
+        ["css", "CSS"],
+      ] as const
+    ).map(([language, label]) => ({
+      id: `lang-${language}`,
+      label,
+      command: "block.setCodeBlockLanguage",
+      input: { language },
+    })),
+  ],
   "list-ops": [
     { id: "checked", label: "勾选", command: "list.toggleChecked" },
     { id: "indent", label: "缩进", command: "list.indent", shortcut: "Tab" },
@@ -266,6 +291,13 @@ const toolbarDefinition: ToolbarDefinition = {
           id: "align",
           label: "对齐",
           command: "block.setAlign",
+          menu: true,
+          alwaysEnabled: true,
+        },
+        {
+          id: "code-language",
+          label: "代码语言",
+          command: "block.setCodeBlockLanguage",
           menu: true,
           alwaysEnabled: true,
         },
@@ -365,6 +397,7 @@ const TOOLBAR_ICONS: Record<string, LucideIcon> = {
   "heading-4": Heading4,
   quote: TextQuote,
   "code-block": CodeXml,
+  "code-language": Braces,
   rule: Minus,
   "bullet-list": List,
   "ordered-list": ListOrdered,
