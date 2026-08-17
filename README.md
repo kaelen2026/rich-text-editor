@@ -10,7 +10,7 @@
 
 复制粘贴覆盖编辑器内部（保开合深度的 Slice）、外部网页 HTML、Word、Excel 与纯文本，全部经 Schema 白名单与 inert 解析。远端图片一律服务端转存，带完整 SSRF 控制。文档可导出 HTML 与 Markdown，也可从 Markdown 导入。
 
-底层原语已经就位但尚未做成功能：`DocumentPatch` 增量变更流、位置映射契约、信封 `annotations` 评论锚点字段。协同、评论、版本历史、AI 属于 M4，尚未实现——四片的切片规格（含验收、回滚与已知坑）见 [`docs/implementation-slices.md`](docs/implementation-slices.md) 的 §3.1。
+M4 的四个高级能力也已交付：Yjs 实时协同（含断线重连与 Schema 准入闸门）、评论（文档外部锚点表，协同下走共享批注表）、版本历史（按 `DocumentPatch` 累积版本，恢复是追加反向变更）、AI 改写/续写/摘要（模型由宿主注入，本仓库只演示位置契约）。各片的交付记录（含验收、回滚与已知坑）见 [`docs/implementation-slices.md`](docs/implementation-slices.md) 的 §3.1。
 
 当前进度与逐片交付状态见 [`docs/implementation-slices.md`](docs/implementation-slices.md)。
 
@@ -164,6 +164,7 @@ ProseMirror
 | --- | --- |
 | [`docs/prd-and-tech-design.md`](docs/prd-and-tech-design.md) | 需求说明与技术方案。架构、接口契约、安全边界、不可逆决策的**唯一权威来源** |
 | [`docs/implementation-slices.md`](docs/implementation-slices.md) | 切片清单与当前交付状态，含未认领的欠账 |
+| [`docs/plugin-development.md`](docs/plugin-development.md) | 如何开发一个插件：契约、校验规则、异步位置契约与协同注意事项，基于七个已交付插件的真实模式 |
 | [`docs/performance-budgets.md`](docs/performance-budgets.md) | 性能基准口径与 CI 门禁阈值 |
 | [`docs/y-prosemirror-compatibility.md`](docs/y-prosemirror-compatibility.md) | 协同的兼容性结论与接入边界，含 y-prosemirror 会删内容这条实测 |
 | [`AGENTS.md`](AGENTS.md) | 分支与 PR 流程、工具链、TDD 约定 |
