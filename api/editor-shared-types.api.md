@@ -18,6 +18,52 @@ interface ClipboardNotice {
 ```
 
 ```ts
+interface CollabPeer extends CollabPeerIdentity {
+  /** 会话内唯一，取自 Yjs 的 clientID。断线重连后会变。 */
+  id: number;
+  local: boolean;
+}
+```
+
+```ts
+interface CollabPeerIdentity {
+  name: string;
+  /** 光标与选区的颜色，十六进制。 */
+  color: string;
+}
+```
+
+```ts
+interface CollabRejection {
+  code: "schema-incompatible";
+  /** 共享文档里本端 Schema 不认识的节点名，按出现顺序去重。 */
+  unknownNodes: string[];
+  /** 同上，标记名。标记不会触发删除，但同样意味着本端表达不全。 */
+  unknownMarks: string[];
+  message: string;
+}
+```
+
+```ts
+interface CollabState {
+  enabled: boolean;
+  status: CollabStatus;
+  /**
+   * 是否已绑定共享文档。为 false 时编辑的是本地文档，改动不会同步——
+   * 连接中、以及被拒绝后，都处于这个状态。
+   */
+  bound: boolean;
+  rejection?: CollabRejection;
+  /** 含本端自己，按 `id` 升序。 */
+  peers: readonly CollabPeer[];
+}
+```
+
+```ts
+type CollabStatus = "disconnected" | "connecting" | "connected" | "synced";
+```
+
+```ts
 type CommandFailureReason =
   | "disabled"
   | "destroyed"
@@ -292,7 +338,9 @@ type EditorEventName =
   | "limitExceeded"
   | "patch"
   | "pluginError"
-  | "clipboardNotice";
+  | "clipboardNotice"
+  | "collabChanged"
+  | "collabRejected";
 ```
 
 ```ts
@@ -306,6 +354,10 @@ interface EditorEventPayload {
   clipboardNotice: ClipboardNotice;
   /** 每个内容事务一条，可用于增量保存、协同和版本历史。 */
   patch: DocumentPatch;
+  /** 连接状态、绑定状态或在线协作者发生变化。 */
+  collabChanged: CollabState;
+  /** 本端 Schema 与共享文档不兼容，已放弃接入。文档仍是本地那一份。 */
+  collabRejected: CollabRejection;
 }
 ```
 

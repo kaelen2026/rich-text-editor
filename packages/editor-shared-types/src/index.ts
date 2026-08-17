@@ -233,6 +233,57 @@ export interface ClipboardNotice {
 }
 
 /**
+ * 协同连接状态（方案 §17、§19 第 5 条）。
+ *
+ * `connected` 与 `synced` 必须分开：连上了但还没收到对方的完整状态时，本端看到的
+ * 文档是不完整的，此刻绑定共享文档等于拿一份残缺内容去和别人对齐。
+ */
+export type CollabStatus = "disconnected" | "connecting" | "connected" | "synced";
+
+/** 协作者的可见身份。宿主提供，编辑器只负责广播与渲染。 */
+export interface CollabPeerIdentity {
+  name: string;
+  /** 光标与选区的颜色，十六进制。 */
+  color: string;
+}
+
+export interface CollabPeer extends CollabPeerIdentity {
+  /** 会话内唯一，取自 Yjs 的 clientID。断线重连后会变。 */
+  id: number;
+  local: boolean;
+}
+
+/**
+ * 协同接入被拒绝的原因。
+ *
+ * 目前只有一种，而它是硬拒绝而不是降级：y-prosemirror 解码共享文档时，遇到本端
+ * Schema 里没有的节点会**把那个节点从共享文档里删掉**——缺插件的客户端不是"打不开"，
+ * 是替所有人删内容。§9.3 承诺的"缺插件不丢内容"在协同下只能靠不接入来兑现。
+ */
+export interface CollabRejection {
+  code: "schema-incompatible";
+  /** 共享文档里本端 Schema 不认识的节点名，按出现顺序去重。 */
+  unknownNodes: string[];
+  /** 同上，标记名。标记不会触发删除，但同样意味着本端表达不全。 */
+  unknownMarks: string[];
+  message: string;
+}
+
+/** 协同会话的对外状态。未配置协同时 `enabled` 为 false，其余字段为静止值。 */
+export interface CollabState {
+  enabled: boolean;
+  status: CollabStatus;
+  /**
+   * 是否已绑定共享文档。为 false 时编辑的是本地文档，改动不会同步——
+   * 连接中、以及被拒绝后，都处于这个状态。
+   */
+  bound: boolean;
+  rejection?: CollabRejection;
+  /** 含本端自己，按 `id` 升序。 */
+  peers: readonly CollabPeer[];
+}
+
+/**
  * 事件名。只列出当前真实会派发的事件；后续切片按需增补
  * （`patch` 等见方案 §9.4）。
  */
@@ -243,7 +294,9 @@ export type EditorEventName =
   | "limitExceeded"
   | "patch"
   | "pluginError"
-  | "clipboardNotice";
+  | "clipboardNotice"
+  | "collabChanged"
+  | "collabRejected";
 
 /** 事件载荷。没有载荷的事件为 `undefined`，`() => void` 形态的监听器照常可用。 */
 export interface EditorEventPayload {
@@ -256,6 +309,10 @@ export interface EditorEventPayload {
   clipboardNotice: ClipboardNotice;
   /** 每个内容事务一条，可用于增量保存、协同和版本历史。 */
   patch: DocumentPatch;
+  /** 连接状态、绑定状态或在线协作者发生变化。 */
+  collabChanged: CollabState;
+  /** 本端 Schema 与共享文档不兼容，已放弃接入。文档仍是本地那一份。 */
+  collabRejected: CollabRejection;
 }
 
 /**
