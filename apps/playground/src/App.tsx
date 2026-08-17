@@ -2,6 +2,7 @@ import { createEditor, type EditorOptions, type RichEditor } from "@kaelen/edito
 import { markdownToDocument } from "@kaelen/editor-markdown";
 import { createAiPlugin } from "@kaelen/editor-plugin-ai";
 import { createColorPlugin } from "@kaelen/editor-plugin-color";
+import { createCommentPlugin } from "@kaelen/editor-plugin-comment";
 import { createImagePlugin } from "@kaelen/editor-plugin-image";
 import { createLinkPlugin } from "@kaelen/editor-plugin-link";
 import { createTablePlugin } from "@kaelen/editor-plugin-table";
@@ -49,6 +50,7 @@ import {
   ListTodo,
   type LucideIcon,
   Merge,
+  MessageSquarePlus,
   Minus,
   PaintBucket,
   Pilcrow,
@@ -76,6 +78,7 @@ import { type ReactNode, useEffect, useRef, useState, useSyncExternalStore } fro
 import { createPlaygroundAi } from "./ai";
 import { createCollabOptions } from "./collab";
 import { ColorPicker, type ColorPickerMenu } from "./color-picker";
+import { CommentPanel } from "./comment-panel";
 import { createE2EProbe, E2E_ENABLED, type E2EProbe, exposeE2EHooks } from "./e2e-hooks";
 import { ImageToolbar } from "./image-toolbar";
 
@@ -373,6 +376,7 @@ const toolbarDefinition: ToolbarDefinition = {
       label: "插入",
       items: [
         { id: "image", label: "图片", command: "image.insert", alwaysEnabled: true },
+        { id: "comment", label: "评论", command: "comment.add" },
         {
           id: "table-ops",
           label: "表格",
@@ -436,6 +440,7 @@ const TOOLBAR_ICONS: Record<string, LucideIcon> = {
   "background-color": PaintBucket,
   link: Link,
   unlink: Unlink,
+  comment: MessageSquarePlus,
   image: Image,
   undo: Undo2,
   redo: Redo2,
@@ -542,6 +547,7 @@ function bootEditor(faulty: boolean, document: EditorEnvelope): Boot {
       createTablePlugin(),
       createColorPlugin(),
       createImagePlugin({ uploader: playgroundUploader }),
+      createCommentPlugin(),
       createAiPlugin({ service: ai.service }),
       ...(faulty ? FAULTY_PLUGINS : []),
       ...probe.plugins,
@@ -748,6 +754,13 @@ function Chrome({
           }
           if (item.id === "image") {
             imageInput.current?.click();
+            return true;
+          }
+          if (item.id === "comment") {
+            const text = window.prompt("评论内容");
+            if (text && text.trim().length > 0) {
+              editor.execute("comment.add", { payload: { text: text.trim() } });
+            }
             return true;
           }
         }}
@@ -1038,6 +1051,7 @@ export function App() {
             <div className="paper">
               <EditorContent />
             </div>
+            <CommentPanel />
             <ImageToolbar />
           </div>
         </div>

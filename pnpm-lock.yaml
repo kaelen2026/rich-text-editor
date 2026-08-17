@@ -126,6 +126,9 @@ importers:
       '@kaelen/editor-plugin-color':
         specifier: workspace:*
         version: link:../../packages/editor-plugin-color
+      '@kaelen/editor-plugin-comment':
+        specifier: workspace:*
+        version: link:../../packages/editor-plugin-comment
       '@kaelen/editor-plugin-image':
         specifier: workspace:*
         version: link:../../packages/editor-plugin-image

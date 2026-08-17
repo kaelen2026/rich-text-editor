@@ -688,14 +688,101 @@ details[open] > summary .disclosure {
  * 代价是行宽跟着容器走，不再锁在 68ch，要收回来就给 .ProseMirror 加 max-inline-size。
  */
 .stage {
+  display: flex;
+  align-items: stretch;
   border-end-start-radius: calc(var(--radius) - 1px);
   border-end-end-radius: calc(var(--radius) - 1px);
   background: var(--paper);
 }
 
 .paper {
+  flex: 1;
+  min-inline-size: 0;
   min-block-size: 62vh;
   padding: var(--s6) var(--s7);
+}
+
+/* ---- 评论：正文里的高亮与右侧的侧栏 ---- */
+
+/* 评论高亮是 Decoration，不是 mark：它不进文档、不进导出，删评论也不会留残留。 */
+.ProseMirror .co-comment {
+  background: color-mix(in srgb, #f5b301 26%, transparent);
+  border-block-end: 1px solid color-mix(in srgb, #f5b301 60%, transparent);
+}
+
+.comment-panel {
+  inline-size: 232px;
+  flex-shrink: 0;
+  padding: var(--s4);
+  border-inline-start: 1px solid var(--hairline);
+  background: var(--chrome);
+  border-end-end-radius: calc(var(--radius) - 1px);
+}
+
+.comment-panel-title {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  margin: 0 0 var(--s3);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.comment-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.comment-item {
+  padding: var(--s3);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+}
+
+.comment-item[data-comment-orphaned] {
+  opacity: 0.72;
+}
+
+.comment-text {
+  margin: 0 0 var(--s2);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.comment-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+  margin: 0;
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+
+.comment-orphaned {
+  color: var(--warn);
+}
+
+.comment-remove {
+  display: inline-flex;
+  padding: 2px;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+
+.comment-remove:hover {
+  color: var(--danger);
+  background: color-mix(in srgb, currentcolor 10%, transparent);
 }
 
 .workbench:focus-within {
@@ -1515,6 +1602,16 @@ div.co-unknown {
   .paper {
     min-block-size: 55vh;
     padding: var(--s5) var(--s4);
+  }
+
+  .stage {
+    flex-direction: column;
+  }
+
+  .comment-panel {
+    inline-size: auto;
+    border-inline-start: 0;
+    border-block-start: 1px solid var(--hairline);
   }
 
   .ProseMirror {
