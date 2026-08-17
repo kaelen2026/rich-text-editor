@@ -53,7 +53,9 @@ jobs:
       - name: Install Playwright browser
         run: pnpm exec playwright install --with-deps chromium
 
-      # 只跑 jsdom 验不了的两类：输入法组合态与粘贴解析阶段的网络请求数。
+      # 只跑 jsdom 验不了的三类：输入法组合态、粘贴解析阶段的网络请求数，
+      # 以及协同（两个浏览器上下文 + 一条真实 WebSocket + 真实断网重连）。
+      # 协同演示中继由 playwright.config.ts 的 webServer 自己拉起。
       - name: Run browser acceptance
         run: pnpm e2e
 
