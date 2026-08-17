@@ -176,6 +176,72 @@ describe("外部 HTML 粘贴", () => {
     });
   });
 
+  it("容器元素透明：内部的块结构不被压平成一个段落", () => {
+    usingDOM(() => {
+      // 真实网页复制出来的 HTML 几乎总是裹着容器。从前这条路径把整个容器收成一个
+      // 段落，标题、正文、列表被拼成一行；而 golden 语料里的样本恰好都没有外层
+      // 容器，所以一直没暴露出来。
+      const slice = parseExternalHTML(
+        schema,
+        "<div><h2>标题</h2><p>正文</p><ul><li>条目</li></ul></div>",
+      );
+
+      expect(slice.content.toJSON()).toEqual([
+        {
+          type: "heading",
+          attrs: { level: 2, align: null },
+          content: [{ type: "text", text: "标题" }],
+        },
+        { type: "paragraph", attrs: { align: null }, content: [{ type: "text", text: "正文" }] },
+        {
+          type: "bullet_list",
+          content: [
+            {
+              type: "list_item",
+              content: [
+                {
+                  type: "paragraph",
+                  attrs: { align: null },
+                  content: [{ type: "text", text: "条目" }],
+                },
+              ],
+            },
+          ],
+        },
+      ]);
+    });
+  });
+
+  it("容器里连续的行内内容收成段落，容器上的对齐传下去", () => {
+    usingDOM(() => {
+      const slice = parseExternalHTML(
+        schema,
+        '<section style="text-align:center">散落文字<b>加粗</b><p>自带段落</p>更多文字</section>',
+      );
+
+      expect(slice.content.toJSON()).toEqual([
+        {
+          type: "paragraph",
+          attrs: { align: "center" },
+          content: [
+            { type: "text", text: "散落文字" },
+            { type: "text", marks: [{ type: "strong" }], text: "加粗" },
+          ],
+        },
+        {
+          type: "paragraph",
+          attrs: { align: null },
+          content: [{ type: "text", text: "自带段落" }],
+        },
+        {
+          type: "paragraph",
+          attrs: { align: "center" },
+          content: [{ type: "text", text: "更多文字" }],
+        },
+      ]);
+    });
+  });
+
   it("fixtures 中的外部 HTML dump 与黄金 Schema JSON 一致", async () => {
     const fixturePath = resolve(
       import.meta.dirname,
