@@ -1,6 +1,7 @@
 import { createRuntime, type RuntimeOptions } from "@kaelen/editor-runtime";
 import type { RenderSchema } from "@kaelen/editor-schema";
 import type {
+  Annotation,
   CollabState,
   CommandQuery,
   CommandResult,
@@ -57,6 +58,12 @@ export interface RichEditor {
    * 解析器留在可选包 `@kaelen/editor-markdown` 里，只导出的宿主不为它付出体积。
    */
   getSchemaExtensions(): RenderSchema;
+  /**
+   * 当前批注表（方案 §9.8）：评论等能力的锚点，存在信封的 `annotations` 里而
+   * 不在文档里。装了评论插件时锚点随每笔事务映射、锚定内容被删时置 `orphaned`；
+   * 没装时原样透出装载的内容。只读；批注未变时引用稳定，可直接用于框架订阅。
+   */
+  getAnnotations(): readonly Annotation[];
 
   execute(command: string, input?: unknown): CommandResult;
   /**
@@ -118,6 +125,7 @@ export function createEditor(options: EditorOptions = {}): RichEditor {
     getHTML: () => runtime.getHTML(),
     getMarkdown: () => runtime.getMarkdown(),
     getSchemaExtensions: () => runtime.getSchemaExtensions(),
+    getAnnotations: () => runtime.getAnnotations(),
     execute: (command, input) => runtime.execute(command, input),
     queryCommand: (command, input) => runtime.queryCommand(command, input),
     getMode: () => runtime.getMode(),

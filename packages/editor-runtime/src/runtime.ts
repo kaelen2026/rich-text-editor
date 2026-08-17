@@ -18,6 +18,7 @@ import {
   validateEnvelope,
 } from "@kaelen/editor-schema";
 import type {
+  Annotation,
   ClipboardNotice,
   CollabRejection,
   CollabState,
@@ -57,6 +58,12 @@ export interface Runtime {
   getHTML(): string;
   /** 从当前结构化文档生成 Markdown。同样是纯 JS，服务端可直接调用。 */
   getMarkdown(): string;
+  /**
+   * 当前批注表（方案 §9.8）。装了批注类插件（如评论）时是随事务映射的活数据，
+   * 否则原样透出装载时信封里的内容。只读；引用在批注未变时保持稳定，
+   * 可直接喂给框架订阅。
+   */
+  getAnnotations(): readonly Annotation[];
   /**
    * 已启用插件贡献的节点/标记规格。
    *
@@ -128,6 +135,10 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
   const commands = resolution.commands;
   const sessionExtensions = resolution.enabled.flatMap(
     (plugin) => plugin.createSessionExtensions?.() ?? [],
+  );
+  // 批注权威最多一个：装了评论类插件时批注是它的活数据，否则原样透传信封。
+  const annotationOwner = sessionExtensions.find(
+    (extension) => typeof extension.annotations === "function",
   );
   const breaker = new PluginBreaker();
 
@@ -240,12 +251,29 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
    * 三态对命令的门禁：禁用态一律拒绝，只读态只放行不改文档的命令。
    * 门禁放在 runtime 而不是每条命令里，插件命令因此自动受同一条规则约束。
    */
+  /** 当前批注的真实数组：有权威扩展时取活数据，否则用装载时记下的那份。 */
+  function currentAnnotations(): readonly Annotation[] {
+    return annotationOwner?.annotations?.() ?? meta.annotations;
+  }
+
+  // 只读包装按源数组缓存：批注没变时 getAnnotations() 必须返回同一个引用。
+  const annotationProxies = new WeakMap<object, readonly Annotation[]>();
+  function readOnlyAnnotations(): readonly Annotation[] {
+    const source = currentAnnotations();
+    let proxy = annotationProxies.get(source);
+    if (!proxy) {
+      proxy = readOnlySnapshot(source as Annotation[]);
+      annotationProxies.set(source, proxy);
+    }
+    return proxy;
+  }
+
   /** 当前信封的真实对象，同一事务内复用；`getDocument` 与大小计算共享它。 */
   function currentEnvelope(): EditorEnvelope {
     documentSnapshot ??= {
       ...meta,
       plugins: { ...meta.plugins },
-      annotations: cloneJson(meta.annotations),
+      annotations: cloneJson(currentAnnotations()) as Annotation[],
       doc: session.docJSON,
     };
     return documentSnapshot;
@@ -319,6 +347,8 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
       for (const plugin of resolution.enabled) {
         meta.plugins[plugin.name] ??= plugin.structureVersion ?? 1;
       }
+      // 批注权威接手信封里的批注：装载后由它随事务映射，取回时再从它拿。
+      annotationOwner?.loadAnnotations?.(envelope.annotations);
       // 装载是初始化，不是用户编辑：修订号与脏标记归零。
       revision = 0;
       dirty = false;
@@ -373,6 +403,10 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
         nodes: resolution.nodes,
         marks: resolution.marks,
       });
+    },
+
+    getAnnotations(): readonly Annotation[] {
+      return readOnlyAnnotations();
     },
 
     // 拷一层再交出去：插件规格是启动时定死的内部状态，宿主拿到的应该是一张

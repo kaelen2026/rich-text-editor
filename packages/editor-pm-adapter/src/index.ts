@@ -1,4 +1,9 @@
 export {
+  type CollabAnnotationStore,
+  collabAnnotationStore,
+  isCollabChangeOrigin,
+} from "./annotation-anchors";
+export {
   CLIPBOARD_ATTRIBUTE,
   CLIPBOARD_MIME,
   type ClipboardNotice,
