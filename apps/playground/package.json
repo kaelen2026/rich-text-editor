@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@kaelen/editor-api": "workspace:*",
+    "@kaelen/editor-collab": "workspace:*",
     "@kaelen/editor-markdown": "workspace:*",
     "@kaelen/editor-plugin-color": "workspace:*",
     "@kaelen/editor-plugin-image": "workspace:*",
@@ -18,9 +19,9 @@
     "@kaelen/editor-pm-adapter": "workspace:*",
     "@kaelen/editor-react": "workspace:*",
     "@kaelen/editor-react-ui": "workspace:*",
+    "@kaelen/editor-runtime": "workspace:*",
     "@kaelen/editor-schema": "workspace:*",
     "@kaelen/editor-shared-types": "workspace:*",
-    "@kaelen/editor-runtime": "workspace:*",
     "@kaelen/editor-ui-model": "workspace:*",
     "lucide-react": "^1.31.0",
     "prosemirror-state": "^1.4.3",

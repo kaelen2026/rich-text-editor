@@ -27,6 +27,23 @@ transaction，并调用接收端 NodeView 的 `update`。因此，M4 将历史�
 pnpm exec vitest run packages/editor-pm-adapter/src/y-prosemirror-compat.test.ts
 ```
 
+## 缺插件的客户端会破坏共享文档（S28 实测）
+
+PoC 当时只说"未验证"。实现 S28 时把它验了，结论比预估严重：
+
+- `createNodeFromYElement` 在 `schema.node()` 抛错时进 `catch`，**把那个 Y 元素从
+  共享文档里删掉**。缺插件的客户端不是"打不开"，是替所有人删内容。
+- `createTextNodesFromYText` 同理，未知**标记**会让整个 `Y.XmlText` 被删——丢的是
+  文字本身，不是格式。单机装载时 §9.3 承诺的"丢标记保文本"在协同下不成立。
+
+两条都钉在 `packages/editor-pm-adapter/src/y-prosemirror-compat.test.ts` 里，是可
+执行的证据而不是描述。
+
+因此 S28 的兼容判断放在**更新写进 `Y.Doc` 之前**：读 update 字节里的节点名与标记名
+（`collectUpdateNames`），本端 Schema 不认识就整条不应用，随后退出协作并上报
+`collabRejected`。这是唯一 race-free 的位置——等 y-prosemirror 解码完再检查，内容
+已经没了。同一套机制既管接入时，也管接入之后别的协作者新插进来的未知节点。
+
 初始化持久化文档时，应仅在第一个编辑器连接前把平台 JSON 导入共享片段：
 
 ```ts
@@ -34,10 +51,13 @@ prosemirrorJSONToYXmlFragment(schema, documentJson, ydoc.getXmlFragment("prosemi
 ```
 
 随后每个视图使用同一个片段配置 `ySyncPlugin(fragment)`。同一协作文档的所有参与者
-必须安装兼容的 Schema；当前 `unknown_*` 兜底只覆盖平台 JSON 装载，尚未验证对
-`Y.XmlFragment` 的未知节点降级。因此，缺少表格或自定义节点的客户端在 M4 前不得加入
-该协作文档；若要支持该场景，需先实现并验证专用的 Yjs 解码降级层，且绝不能把未知结构
-写回为其他结构。
+必须安装兼容的 Schema——这条现在由 `CollabBinding` 强制执行，不再是一条只写在文档
+里的约定。
+
+**降级不成立，只能拒绝。** `unknown_*` 兜底在协同下没有对应物：兜底的前提是"本端把
+未知结构原样留着"，而 Yjs 的写回是按节点名做结构 diff 的，一个渲染成 `unknown_block`
+的 `co_table` 会在下一次本地编辑时被写回成 `unknown_block`——那才是真正不可逆的破坏。
+因此 S28 的立场是"不兼容就不接入"，而不是"接入后降级显示"。
 
 ## 接入约束与后续工作
 
@@ -49,5 +69,12 @@ prosemirrorJSONToYXmlFragment(schema, documentJson, ydoc.getXmlFragment("prosemi
 - 生产接入需要在 `editor-pm-adapter` 增加显式协同会话配置：安装 `ySyncPlugin`，并将
   `recordHistory` 的实现切换到 Yjs 的 UndoManager。不要让业务层直接接触
   `EditorState`、Yjs transaction 或历史 meta。
-- 此测试使用内存 Yjs 文档和 jsdom，不覆盖 provider 断连重连、awareness、两个真实浏览器
-  的并发编辑，或中文 IME 期间远端 transaction 排队；这些是 M4 前应补的浏览器端验证。
+- 此测试使用内存 Yjs 文档和 jsdom。断连重连、awareness、两个真实浏览器的并发编辑与
+  中文 IME 期间的远端 transaction，已在 S28 由 `e2e/collab.spec.ts` 在真实浏览器里覆盖。
+- **y-prosemirror 全文没有一处组合态处理**（`grep -rn composing` 零命中）。远端更新一到
+  就整篇重建 DOM，正在被输入法接管的那段字随即消失。S28 的做法是把入站更新挡在 Yjs
+  这一层（`CollabProvider.setInboundPaused`），而不是到会话的挂起队列里重放 ySync 的
+  step——那些 step 是"整篇替换"，重映射它没有意义。
+- **撤销要用 `undoCommand` / `redoCommand`，不是同包的 `undo` / `redo`。** 后者无视
+  `dispatch`，一调用就真的撤销；而工具栏每渲染一帧都会用 `dispatch == null` 的试跑去问
+  可用性，用错等于每帧撤销一次。

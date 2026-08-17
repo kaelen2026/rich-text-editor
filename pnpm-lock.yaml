@@ -96,11 +96,27 @@ importers:
         specifier: ^3.5.0
         version: 3.5.41(typescript@5.9.3)
 
+  apps/collab-server:
+    dependencies:
+      '@kaelen/editor-collab':
+        specifier: workspace:*
+        version: link:../../packages/editor-collab
+      ws:
+        specifier: ^8.21.3
+        version: 8.21.3
+    devDependencies:
+      '@types/ws':
+        specifier: ^8.18.1
+        version: 8.18.1
+
   apps/playground:
     dependencies:
       '@kaelen/editor-api':
         specifier: workspace:*
         version: link:../../packages/editor-api
+      '@kaelen/editor-collab':
+        specifier: workspace:*
+        version: link:../../packages/editor-collab
       '@kaelen/editor-markdown':
         specifier: workspace:*
         version: link:../../packages/editor-markdown
@@ -177,6 +193,21 @@ importers:
       '@kaelen/editor-shared-types':
         specifier: workspace:*
         version: link:../editor-shared-types
+
+  packages/editor-collab:
+    dependencies:
+      '@kaelen/editor-shared-types':
+        specifier: workspace:*
+        version: link:../editor-shared-types
+      lib0:
+        specifier: ^0.2.117
+        version: 0.2.117
+      y-protocols:
+        specifier: ^1.0.7
+        version: 1.0.7(yjs@13.6.32)
+      yjs:
+        specifier: ^13.6.32
+        version: 13.6.32
 
   packages/editor-markdown:
     dependencies:
@@ -293,6 +324,9 @@ importers:
 
   packages/editor-pm-adapter:
     dependencies:
+      '@kaelen/editor-collab':
+        specifier: workspace:*
+        version: link:../editor-collab
       '@kaelen/editor-schema':
         specifier: workspace:*
         version: link:../editor-schema
@@ -329,7 +363,6 @@ importers:
       prosemirror-view:
         specifier: ^1.41.4
         version: 1.42.2
-    devDependencies:
       y-prosemirror:
         specifier: ^1.3.7
         version: 1.3.7(prosemirror-model@1.25.11)(prosemirror-state@1.4.4)(prosemirror-view@1.42.2)(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)
@@ -1139,6 +1172,9 @@ packages:
 
   '@types/tough-cookie@4.0.5':
     resolution: {integrity: sha512-/Ad8+nIOV7Rl++6f1BdKxFSMgmoqEoYbHRpPcx3JEfv8VRsQe9Z4mCXeJBzxs7mbHY/XOZZuXlRNfhpVPbs6ZA==}
+
+  '@types/ws@8.18.1':
+    resolution: {integrity: sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==}
 
   '@vitejs/plugin-react@5.2.0':
     resolution: {integrity: sha512-YmKkfhOAi3wsB1PhJq5Scj3GXMn3WvtQ/JC0xoopuHoXSdmtdStOpFrYaT1kie2YgFBcIe64ROzMYRjCrYOdYw==}
@@ -2796,6 +2832,10 @@ snapshots:
       csstype: 3.2.3
 
   '@types/tough-cookie@4.0.5': {}
+
+  '@types/ws@8.18.1':
+    dependencies:
+      '@types/node': 26.2.0
 
   '@vitejs/plugin-react@5.2.0(vite@7.3.6(@types/node@26.2.0)(jiti@2.6.1)(tsx@4.23.12)(yaml@2.9.0))':
     dependencies:

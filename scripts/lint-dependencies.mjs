@@ -36,7 +36,9 @@ const ALLOWED = {
   "editor-remote-image-service": [],
   "editor-schema": ["editor-shared-types"],
   "editor-ui-model": ["editor-shared-types"],
-  "editor-pm-adapter": ["editor-schema", "editor-shared-types"],
+  // 协同是传输层：它认识 Yjs，但不认识 ProseMirror，也不认识文档 Schema。
+  "editor-collab": ["editor-shared-types"],
+  "editor-pm-adapter": ["editor-collab", "editor-schema", "editor-shared-types"],
   "editor-runtime": ["editor-pm-adapter", "editor-schema", "editor-shared-types"],
   "editor-api": ["editor-runtime", "editor-schema", "editor-shared-types"],
   "editor-markdown": ["editor-schema", "editor-shared-types"],

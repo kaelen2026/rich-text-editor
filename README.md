@@ -41,14 +41,15 @@ pnpm test
 | `pnpm lint:deps` | 包间依赖方向：越层、幽灵依赖、核心包引入框架，任一即失败 |
 | `pnpm typecheck` | 全仓库 `tsc --noEmit` |
 | `pnpm test` / `pnpm test:watch` | Vitest |
-| `pnpm e2e` | Playwright 真实浏览器验收：输入法组合态（CDP）与粘贴解析阶段的网络请求数。首次运行前跑一次 `pnpm exec playwright install chromium` |
+| `pnpm e2e` | Playwright 真实浏览器验收：输入法组合态（CDP）、粘贴解析阶段的网络请求数、协同（两个浏览器上下文 + 真实 WebSocket + 真实断网重连）。首次运行前跑一次 `pnpm exec playwright install chromium` |
 | `pnpm bench` | 性能基准与预算门禁，超预算即失败（见 [`docs/performance-budgets.md`](docs/performance-budgets.md)） |
 | `pnpm render <doc.json> [--format html\|markdown]` | 纯 Node 环境从文档 JSON 渲染 HTML 或 Markdown，**不需要 jsdom** |
 | `pnpm demo:remote-image-service` | 启动远端图片转存的本地演示服务 |
+| `pnpm demo:collab-server` | 启动协同的本地演示中继服务。配合 `/?collab=<房间名>` 打开 playground |
 
 CI 的 `Quality` 检查按顺序跑 `check` → `typecheck` → `test` → `e2e` → `bench` → commitlint。
 
-`e2e/` 只放 jsdom 证明不了的东西，不做第二套功能回归：输入法组合态需要真实的 IME 事件时序，"inert 解析不发网络请求"需要真实浏览器才有网络栈可数。
+`e2e/` 只放 jsdom 证明不了的东西，不做第二套功能回归：输入法组合态需要真实的 IME 事件时序，"inert 解析不发网络请求"需要真实浏览器才有网络栈可数，协同需要两个真实上下文与一条真的能被拔掉的 WebSocket。
 
 ## 用起来长什么样
 
@@ -137,6 +138,7 @@ ProseMirror
 | `editor-api` | 面向业务的窄接口，**刻意不暴露任何 ProseMirror 类型** |
 | `editor-plugin-{link,table,image,color}` | 可选能力，贡献 `co_` 前缀的节点与标记 |
 | `editor-remote-image-service` | 远端图片转存策略与 SSRF 控制，可替换的服务契约 |
+| `editor-collab` | 协同传输：可替换的 `CollabProvider` 契约、一个 WebSocket 实现、服务端房间逻辑。认识 Yjs，不认识 ProseMirror |
 | `editor-ui-model` | 工具栏行为状态机与浮动工具栏定位，无框架 |
 | `editor-{react,vue}` / `editor-{react,vue}-ui` | 框架挂载与渲染，不含编辑规则 |
 
@@ -151,6 +153,8 @@ ProseMirror
 3. **持久化名字是数据契约。** 冻结核心集不带前缀、永不改名；插件贡献的节点与标记一律 `co_` 前缀。改名等于全量数据迁移。
 4. **位置是对旧文档的引用。** 上传、AI 改写、评论锚点、协同都持有过期位置，因此位置映射是核心机制而非实现细节；异步状态存 plugin state 而不是文档。
 
+第 2 条在协同下有一个例外，值得单独记住：**协同不做降级，只做拒绝。** y-prosemirror 解码共享文档时，遇到本端 Schema 没有的节点或标记会把它从共享文档里删掉——缺插件的客户端不是打不开，是替所有人删内容。因此本端认不出来的更新一律不写进 `Y.Doc`，并当场退出协作。同一份协作文档的所有参与者必须装兼容的插件集，这是宿主分发链接时的责任。
+
 ## 文档
 
 | 文档 | 内容 |
@@ -158,7 +162,7 @@ ProseMirror
 | [`docs/prd-and-tech-design.md`](docs/prd-and-tech-design.md) | 需求说明与技术方案。架构、接口契约、安全边界、不可逆决策的**唯一权威来源** |
 | [`docs/implementation-slices.md`](docs/implementation-slices.md) | 切片清单与当前交付状态，含未认领的欠账 |
 | [`docs/performance-budgets.md`](docs/performance-budgets.md) | 性能基准口径与 CI 门禁阈值 |
-| [`docs/y-prosemirror-compatibility.md`](docs/y-prosemirror-compatibility.md) | M4 协同的前置兼容性验证结论与接入边界 |
+| [`docs/y-prosemirror-compatibility.md`](docs/y-prosemirror-compatibility.md) | 协同的兼容性结论与接入边界，含 y-prosemirror 会删内容这条实测 |
 | [`AGENTS.md`](AGENTS.md) | 分支与 PR 流程、工具链、TDD 约定 |
 
 `api/` 是公开 API 表面快照，由 `pnpm api:update` 重录。改动接入方看得见的接口时它会在 diff 里出现——这是唯一能让破坏性变更被人过目的机制。`tests/sample-plugin.ts` 是一致性样例插件：它只允许 import `@kaelen/editor-runtime` 一个包，用来证明"新增能力插件不需要改 Core"这句话仍然成立。

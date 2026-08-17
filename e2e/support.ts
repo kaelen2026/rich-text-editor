@@ -1,3 +1,4 @@
+import type { CollabState } from "@kaelen/editor-shared-types";
 import type { CDPSession, Page } from "@playwright/test";
 import { expect } from "@playwright/test";
 
@@ -68,6 +69,36 @@ export async function pasteHTML(page: Page, html: string, plain = ""): Promise<v
 
 export function editorText(page: Page): Promise<string> {
   return page.locator(EDITOR).innerText();
+}
+
+/**
+ * 打开一份接入协同的 playground，并等到它真的绑上了共享文档。
+ *
+ * 不做 `openPlayground` 那套清场：房间是每条用例自己新开的，本来就是空的，
+ * 而在协同下按一次全选删除会同步给所有人，清的是别人的内容。
+ */
+export async function openCollab(page: Page, room: string, name: string): Promise<void> {
+  await page.addInitScript(() => window.localStorage.clear());
+  await page.goto(`/?e2e=1&collab=${encodeURIComponent(room)}&name=${encodeURIComponent(name)}`);
+  await expect(page.locator(EDITOR)).toBeVisible();
+  await page.waitForFunction(() => window.__editorE2E !== undefined);
+  await expect
+    .poll(() => collabState(page).then((state) => state?.bound), { timeout: 15_000 })
+    .toBe(true);
+}
+
+/**
+ * 文档内容，而不是编辑区的 `innerText`。
+ *
+ * 远端光标是渲染进编辑区的 Decoration，协作者的名字因此会出现在 `innerText` 里，
+ * 而且各端看到的名字不同——用它比对两端"内容是否一致"永远不会相等。
+ */
+export function editorDocumentText(page: Page): Promise<string> {
+  return page.evaluate(() => window.__editorE2E?.editor.getMarkdown() ?? "");
+}
+
+export function collabState(page: Page): Promise<CollabState | undefined> {
+  return page.evaluate(() => window.__editorE2E?.editor.getCollabState());
 }
 
 export function isComposing(page: Page): Promise<boolean> {

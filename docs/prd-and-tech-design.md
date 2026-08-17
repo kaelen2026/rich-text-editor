@@ -545,6 +545,16 @@ unknown_inline: { group: 'inline', inline: true, atom: true, attrs: { original: 
 
 M1 使用 `prosemirror-history`。协同（M4）必须换成 Yjs 的 UndoManager——`prosemirror-history` 在协同下会撤销他人的编辑。这一替换的影响面被 `recordHistory` 抽象与 §7.1 的类型约束限制在 `editor-pm-adapter` 内部，**不改变 `RichEditor` 的方法签名**，因此不是业务侧破坏性变更。前置义务：在 M2 结束前完成 y-prosemirror 与本方案 Schema/NodeView 的兼容性验证（尤其表格与自定义 NodeView），避免在 M4 才发现不兼容。
 
+**协同下 §9.3 的降级承诺不成立，必须改为拒绝。** 这一条是实现协同时实测出来的，不是设计推演：y-prosemirror 解码共享文档时，遇到本端 Schema 里没有的节点会把那个元素**从共享文档里删掉**，未知标记删掉的是整个文本节点——也就是整段文字。缺插件的客户端不是"打不开"，是替所有协作者删内容。
+
+降级在这里也救不回来：Yjs 的写回按节点名做结构 diff，一个显示成 `unknown_block` 的 `co_table` 会在下一次本地编辑时被真的写回成 `unknown_block`，那才是不可逆的破坏。因此协同的规则是：
+
+1. 本端 Schema 认不出名字的更新，**在写进 `Y.Doc` 之前**整条拒绝——这是唯一 race-free 的位置，等解码完再判断内容已经没了；
+2. 随即退出协作并派发 `collabRejected`，本地文档停在最后一次看到的状态，不清空也不回退；
+3. 同一份协作文档的所有参与者必须装兼容的插件集。这是宿主分发协作链接时的责任，代码只能挡住破坏，挡不住"这个人编辑不了"。
+
+同一条判断既管接入时，也管接入之后其他协作者新插进来的未知节点。
+
 ### 9.5 位置映射与异步操作契约
 
 所有跨越一次以上变更的操作遵循同一套机制：

@@ -4,6 +4,7 @@ import { createColorPlugin } from "@kaelen/editor-plugin-color";
 import { createImagePlugin } from "@kaelen/editor-plugin-image";
 import { createLinkPlugin } from "@kaelen/editor-plugin-link";
 import { createTablePlugin } from "@kaelen/editor-plugin-table";
+import type { CollabSessionOptions } from "@kaelen/editor-pm-adapter";
 import { applyDocumentPatch, buildSchema } from "@kaelen/editor-pm-adapter";
 import {
   EditorContent,
@@ -15,6 +16,7 @@ import {
 import { EditorToolbar } from "@kaelen/editor-react-ui";
 import { createEmptyEnvelope, stringifyEnvelope } from "@kaelen/editor-schema";
 import {
+  type CollabState,
   DOCUMENT_JSON_LIMIT_BYTES,
   type DocumentPatch,
   type EditorEnvelope,
@@ -68,7 +70,8 @@ import {
   Unlink,
   Zap,
 } from "lucide-react";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { createCollabOptions } from "./collab";
 import { ColorPicker, type ColorPickerMenu } from "./color-picker";
 import { createE2EProbe, type E2EProbe, exposeE2EHooks } from "./e2e-hooks";
 import { ImageToolbar } from "./image-toolbar";
@@ -506,10 +509,13 @@ interface Boot {
   baseDocument: EditorEnvelope;
   /** 只在 `?e2e=1` 时有内容；跟着实例走，不落到模块作用域。 */
   probe: E2EProbe;
+  /** 只在 `?collab=<房间名>` 时有内容。连接跟着页面走，不跟着实例走。 */
+  collab: CollabSessionOptions | undefined;
 }
 
 function bootEditor(faulty: boolean, document: EditorEnvelope): Boot {
   const probe = createE2EProbe();
+  const collab = createCollabOptions();
   const editor = createEditor({
     plugins: [
       createLinkPlugin(),
@@ -519,9 +525,52 @@ function bootEditor(faulty: boolean, document: EditorEnvelope): Boot {
       ...(faulty ? FAULTY_PLUGINS : []),
       ...probe.plugins,
     ],
+    collab,
   });
+  // 装载发生在绑定之前，因此这一步照常有效；绑定之后共享文档才是事实来源，
+  // 那时 loadDocument 会被拒绝。
   const result = editor.loadDocument(document);
-  return { editor, unknownNodes: result.unknownNodes, faulty, baseDocument: document, probe };
+  return {
+    editor,
+    unknownNodes: result.unknownNodes,
+    faulty,
+    baseDocument: document,
+    probe,
+    collab,
+  };
+}
+
+/**
+ * 协同面板。协同状态不进 `EditorSnapshot`——它不是每次渲染都要读的东西——
+ * 因此这里直接订阅 `change`，`getCollabState()` 的引用在状态没变时是稳定的。
+ */
+function CollabPanel() {
+  const editor = useEditor();
+  const state = useSyncExternalStore(
+    (notify) => editor.subscribe("change", notify),
+    () => editor.getCollabState(),
+  );
+  if (!state.enabled) {
+    return null;
+  }
+  const label: Record<CollabState["status"], string> = {
+    disconnected: "已断开",
+    connecting: "连接中",
+    connected: "已连接，同步中",
+    synced: "已同步",
+  };
+  return (
+    <div className="banner" role="status" data-collab-status={state.status}>
+      <strong>协同：{label[state.status]}</strong>
+      {state.bound ? null : <span>（尚未绑定共享文档，当前编辑的是本地内容）</span>}
+      <span data-collab-peers={String(state.peers.length)}>
+        {state.peers.length > 0
+          ? `在线 ${state.peers.length} 人：${state.peers.map((peer) => peer.name).join("、")}`
+          : "暂无其他协作者"}
+      </span>
+      {state.rejection ? <span data-collab-rejected="1">{state.rejection.message}</span> : null}
+    </div>
+  );
 }
 
 function ModeSwitch() {
@@ -922,6 +971,7 @@ export function App() {
   /** 装/不装故障插件是两种配置，切换即换一个实例；文档原样带过去。 */
   function toggleFault(next: boolean) {
     const document = editor.getDocument();
+    // 只销毁编辑器：协同连接跟着页面走，换插件配置不该把别人眼里的"你"下线。
     editor.destroy();
     setBoot(bootEditor(next, document));
     setSaved(null);
@@ -943,6 +993,7 @@ export function App() {
           </p>
         </details>
         <DegradedBanner />
+        <CollabPanel />
         {notice ? (
           <p className="banner banner-warn" role="status">
             {notice}

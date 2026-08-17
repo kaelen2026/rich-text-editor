@@ -19,13 +19,27 @@ import {
   toggleHeading,
   toggleList,
 } from "./block-commands";
+import { collabHistoryCommands, type HistoryCommands } from "./collab";
+
+/** 单机的撤销实现。协同下整体换成 `Y.UndoManager`，见 `historyCommandsFor`。 */
+export const localHistoryCommands: HistoryCommands = { undo, redo };
+
+/**
+ * 撤销/重做走哪一套实现。
+ *
+ * 协同下必须是 `Y.UndoManager`：`prosemirror-history` 会把远端改动一起回退，
+ * 那不是撤销，是替别人删东西。这个分叉只出现在本包里（方案 §9.4）。
+ */
+export function historyCommandsFor(collab: boolean): HistoryCommands {
+  return collab ? collabHistoryCommands : localHistoryCommands;
+}
 
 /** 快捷键与工具栏走同一批命令实现，两条路径不会各自漂移。 */
-function shortcutBindings(schema: Schema): Record<string, Command> {
+function shortcutBindings(schema: Schema, history: HistoryCommands): Record<string, Command> {
   const bindings: Record<string, Command> = {
-    "Mod-z": undo,
-    "Mod-y": redo,
-    "Shift-Mod-z": redo,
+    "Mod-z": history.undo,
+    "Mod-y": history.redo,
+    "Shift-Mod-z": history.redo,
 
     "Mod-Alt-0": setParagraph(schema),
     "Mod->": toggleBlockquote(schema),
@@ -71,13 +85,20 @@ function shortcutBindings(schema: Schema): Record<string, Command> {
 
 /**
  * 状态插件。历史被限制在这一处，上层只通过 `history.undo`/`history.redo`
- * 命令访问——M4 换成 Yjs UndoManager 时影响面止于此包（方案 §9.4）。
+ * 命令访问——协同下换成 Yjs UndoManager，影响面止于此包（方案 §9.4）。
+ *
+ * `collab` 为 true 时不装 `prosemirror-history`：两套历史同时在场会各记各的，
+ * 撤销一次退两步。
  */
-export function editorPlugins(schema: Schema, isComposing: () => boolean = () => false): Plugin[] {
+export function editorPlugins(
+  schema: Schema,
+  isComposing: () => boolean = () => false,
+  collab = false,
+): Plugin[] {
   return [
-    history(),
+    ...(collab ? [] : [history()]),
     compositionInputRules(schema),
-    keymap(shortcutBindings(schema)),
+    keymap(shortcutBindings(schema, historyCommandsFor(collab))),
     keymap(baseKeymap),
     unknownNodeGuard(schema, isComposing),
     ...tablePlugins(schema),
