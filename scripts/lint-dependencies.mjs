@@ -14,7 +14,7 @@
  * 3. **是否引入了这一层不该有的外部依赖**。核心包不许碰 React/Vue；
  *    `editor-shared-types` 零依赖；`editor-schema` 连 ProseMirror 都不能碰。
  */
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { extname, join } from "node:path";
 import ts from "typescript";
 
@@ -100,19 +100,24 @@ function allowedFor(shortName) {
 }
 
 function collectPackages() {
-  return readdirSync("packages")
-    .map((name) => join("packages", name))
-    .filter((dir) => statSync(dir).isDirectory())
-    .map((dir) => {
-      const manifest = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
-      return {
-        dir,
-        name: manifest.name,
-        shortName: manifest.name.replace(SCOPE, ""),
-        dependencies: Object.keys(manifest.dependencies ?? {}),
-        devDependencies: Object.keys(manifest.devDependencies ?? {}),
-      };
-    });
+  return (
+    readdirSync("packages")
+      .map((name) => join("packages", name))
+      .filter((dir) => statSync(dir).isDirectory())
+      // 切分支后 pnpm 会留下只剩 node_modules 的空壳目录：没有 manifest 的
+      // 目录不是包，跳过它，而不是抛一条看起来像仓库坏了的原始堆栈。
+      .filter((dir) => existsSync(join(dir, "package.json")))
+      .map((dir) => {
+        const manifest = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
+        return {
+          dir,
+          name: manifest.name,
+          shortName: manifest.name.replace(SCOPE, ""),
+          dependencies: Object.keys(manifest.dependencies ?? {}),
+          devDependencies: Object.keys(manifest.devDependencies ?? {}),
+        };
+      })
+  );
 }
 
 function checkDeclaredDependencies(pkg, allowed) {
