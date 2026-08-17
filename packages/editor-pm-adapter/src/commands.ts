@@ -1,4 +1,9 @@
-import { type BlockAlign, isBlockAlign, isHeadingLevel } from "@kaelen/editor-schema";
+import {
+  type BlockAlign,
+  isBlockAlign,
+  isCodeLanguage,
+  isHeadingLevel,
+} from "@kaelen/editor-schema";
 import type { CommandResult } from "@kaelen/editor-shared-types";
 import { selectAll, toggleMark } from "prosemirror-commands";
 import { redo, undo } from "prosemirror-history";
@@ -8,6 +13,7 @@ import {
   insertHorizontalRule,
   outdentListItem,
   setBlockAlign,
+  setCodeBlockLanguage,
   setParagraph,
   toggleBlockquote,
   toggleChecked,
@@ -74,6 +80,24 @@ export const coreCommands: Record<string, SessionCommand> = {
     active: (session, input) => {
       const align = alignFrom(input);
       return align !== undefined && session.isAligned(align);
+    },
+  },
+  "block.setCodeBlockLanguage": {
+    run: (session, apply, input) => {
+      const language = languageFrom(input);
+      if (language === undefined) {
+        return {
+          ok: false,
+          reason: "invalid",
+          detail: "语言名只接受字母开头的标识符（如 typescript、c++），或 null 清除",
+        };
+      }
+      return commandResult(session.applyCommand(setCodeBlockLanguage(language), apply));
+    },
+    enabled: (session, input) => languageFrom(input) !== undefined && session.hasCodeLanguage(),
+    active: (session, input) => {
+      const language = languageFrom(input);
+      return language !== undefined && session.isCodeLanguage(language);
     },
   },
   "block.toggleBlockquote": {
@@ -161,6 +185,18 @@ function alignFrom(input: unknown): BlockAlign | null | undefined {
   if (typeof input === "object" && "align" in input) {
     const align = (input as { align: unknown }).align;
     return align === null || isBlockAlign(align) ? align : undefined;
+  }
+  return undefined;
+}
+
+/** 语言同样可以直接传字符串或传 `{ language }`；`null` 是"清除语言"。 */
+function languageFrom(input: unknown): string | null | undefined {
+  if (input === null || isCodeLanguage(input)) {
+    return input;
+  }
+  if (typeof input === "object" && "language" in input) {
+    const language = (input as { language: unknown }).language;
+    return language === null || isCodeLanguage(language) ? language : undefined;
   }
   return undefined;
 }

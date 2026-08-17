@@ -90,6 +90,17 @@ export interface LoadResult {
   errors?: string[];
 }
 
+/**
+ * 文档字数。两个口径都按 Unicode 字符计，CJK 一个字算一个字符；
+ * 刻意不提供按空格分词的 word count——中文里那个数字没有意义（方案 §4.4）。
+ */
+export interface DocumentTextStats {
+  /** 全部字符。emoji 与组合字符按用户看到的一个字形计一个。 */
+  characters: number;
+  /** 不含空白字符的口径。 */
+  charactersWithoutWhitespace: number;
+}
+
 /** 命令失败原因可判别，便于线上定位（方案 §8.1）。 */
 export type CommandFailureReason =
   | "disabled"
@@ -166,6 +177,28 @@ export interface PluginError {
   message: string;
 }
 
+/**
+ * 文档规模硬上限（方案 §14.2）。两条上限的执行点刻意不同：
+ *
+ * - 节点数由会话在唯一事务入口把关，任何来源的插入都受同一条规则约束；
+ * - 字节数由宿主在保存前用 `getDocumentSize()` 把关——保存是宿主的动作，
+ *   编辑器无从代它拒绝，只能给出可判定的事实。
+ *
+ * 两者都只拦"新写入"，不拦装载：已经超限的历史文档必须打得开，否则超限
+ * 本身就成了丢内容的方式。
+ */
+export const DOCUMENT_NODE_LIMIT = 20_000;
+export const DOCUMENT_JSON_LIMIT_BYTES = 2 * 1024 * 1024;
+
+/** 文档规模超限被拒绝时发给宿主的可展示提示。 */
+export interface DocumentLimitNotice {
+  code: "document-node-limit";
+  limit: number;
+  /** 若不拒绝，文档会达到的规模。 */
+  actual: number;
+  message: string;
+}
+
 /** 剪贴板内容被安全或规模策略拒绝、截断时发给宿主的可展示提示。 */
 export interface ClipboardNotice {
   code: "html-too-large" | "file-limit" | "image-too-large" | "word-file-image" | "table-limit";
@@ -180,6 +213,7 @@ export type EditorEventName =
   | "change"
   | "compositionChanged"
   | "documentDegraded"
+  | "limitExceeded"
   | "patch"
   | "pluginError"
   | "clipboardNotice";
@@ -189,6 +223,8 @@ export interface EditorEventPayload {
   change: undefined;
   compositionChanged: boolean;
   documentDegraded: undefined;
+  /** 一次被规模上限拒绝的写入。文档保持在被拒绝之前的状态。 */
+  limitExceeded: DocumentLimitNotice;
   pluginError: PluginError;
   clipboardNotice: ClipboardNotice;
   /** 每个内容事务一条，可用于增量保存、协同和版本历史。 */
@@ -255,9 +291,19 @@ export interface CoreStyleParseRule {
 /** DOM 属性的声明式读取与规范化规则。 */
 export interface CoreDOMAttributeRule {
   attribute: string;
-  type?: "integer";
+  /**
+   * `token` 只接受标识符字符（首位字母，其余 `a-z0-9+#._-`，最长 32），
+   * 用于取值开放、枚举不完的属性：语言名一类的值会进 `class`，放行任意
+   * 字符串等于让文档内容决定标签结构。
+   */
+  type?: "integer" | "token";
   min?: number;
   max?: number;
+  /**
+   * `token` 专用：属性值按空白拆成列表，取第一个带此前缀的项并去掉前缀。
+   * `class="highlight language-ts"` 因此读作 `ts`。
+   */
+  prefix?: string;
   /**
    * 取值白名单。DOM 上的字符串会被原样写进文档属性，再由 `toDOM` 拼进 HTML；
    * 少了白名单，一份手写的 `data-align="x;background:url(…)"` 就能顺着解析

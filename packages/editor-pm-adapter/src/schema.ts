@@ -109,10 +109,16 @@ function toTagParseRule(rule: CoreTagParseRule): TagParseRule {
   };
 }
 
+/** 与 `editor-schema` 的语言白名单同一套字符集，见 `CoreDOMAttributeRule.type`。 */
+const TOKEN_PATTERN = /^[a-z][a-z0-9+#._-]{0,31}$/;
+
 function readDOMAttribute(element: HTMLElement, rule: CoreDOMAttributeRule): unknown {
   const raw = element.getAttribute(rule.attribute);
   if (rule.oneOf) {
     return raw !== null && rule.oneOf.includes(raw) ? raw : rule.default;
+  }
+  if (rule.type === "token") {
+    return readToken(raw, rule);
   }
   if (rule.type !== "integer") {
     return raw ?? rule.default;
@@ -125,6 +131,20 @@ function readDOMAttribute(element: HTMLElement, rule: CoreDOMAttributeRule): unk
     rule.min ?? Number.MIN_SAFE_INTEGER,
     Math.min(rule.max ?? Number.MAX_SAFE_INTEGER, value),
   );
+}
+
+function readToken(raw: string | null, rule: CoreDOMAttributeRule): unknown {
+  if (raw === null) {
+    return rule.default;
+  }
+  const candidates = rule.prefix
+    ? raw
+        .split(/\s+/)
+        .filter((token) => token.startsWith(rule.prefix as string))
+        .map((token) => token.slice((rule.prefix as string).length))
+    : [raw.trim()];
+  const token = candidates.map((value) => value.toLowerCase()).find((value) => value.length > 0);
+  return token !== undefined && TOKEN_PATTERN.test(token) ? token : rule.default;
 }
 
 function asDomOutputSpec(spec: DomOutputSpec): DOMOutputSpec {

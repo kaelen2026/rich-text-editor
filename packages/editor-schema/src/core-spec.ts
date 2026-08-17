@@ -38,6 +38,18 @@ function headingTag(level: unknown): string {
 }
 
 /**
+ * 代码块的语言标识。取值是开放集合（高亮器认识什么就是什么），因此用字符
+ * 白名单而不是枚举：语言名会进 `class` 属性，放行任意字符串等于让文档内容
+ * 决定标签结构。首字符必须是字母，其余允许 `c++`、`c#`、`objective-c` 这类
+ * 真实存在的写法。
+ */
+const CODE_LANGUAGE_PATTERN = /^[a-z][a-z0-9+#._-]{0,31}$/;
+
+export function isCodeLanguage(value: unknown): value is string {
+  return typeof value === "string" && CODE_LANGUAGE_PATTERN.test(value);
+}
+
+/**
  * 文本块的水平对齐。`null` 是"没有设置"，与"设成左对齐"不是一回事：
  * 前者跟随容器（阿拉伯语等 RTL 文档里就是右起），后者钉死在左边。
  */
@@ -63,6 +75,19 @@ const ALIGN_FROM_DOM = {
  */
 function alignAttributes(align: unknown): [Record<string, string>] | [] {
   return isBlockAlign(align) ? [{ style: `text-align:${align}`, "data-align": align }] : [];
+}
+
+/**
+ * 代码块的 DOM 表达。语言写两处：`data-language` 供重新解析，`class` 供高亮器
+ * 与外部应用识别。没设置语言时输出与从前逐字节相同的 `<pre><code>`——绝大多数
+ * 代码块不该为一个未使用的属性付出体积。文档里的非法语言在这里被当作没设置，
+ * 而不是原样拼进标签。
+ */
+function codeBlockDOM(language: unknown): DomOutputSpec {
+  if (!isCodeLanguage(language)) {
+    return ["pre", ["code", 0]];
+  }
+  return ["pre", { "data-language": language }, ["code", { class: `language-${language}` }, 0]];
 }
 
 /**
@@ -119,8 +144,27 @@ export const coreNodes: Record<string, CoreNodeSpec> = {
     code: true,
     defining: true,
     whitespace: "pre",
-    parseDOM: [{ tag: "pre", preserveWhitespace: "full" }],
-    toDOM: () => ["pre", ["code", 0]],
+    attrs: { language: { default: null } },
+    // `data-language` 是自有输出的入口，`class="language-x"` 是外部高亮器的
+    // 通行写法；两条都只读一个白名单化的 token，非法值当作没设置。
+    parseDOM: [
+      {
+        tag: "pre[data-language]",
+        preserveWhitespace: "full",
+        attrsFromDOM: {
+          language: { attribute: "data-language", type: "token", default: null },
+        },
+      },
+      {
+        tag: "pre[class]",
+        preserveWhitespace: "full",
+        attrsFromDOM: {
+          language: { attribute: "class", type: "token", prefix: "language-", default: null },
+        },
+      },
+      { tag: "pre", preserveWhitespace: "full" },
+    ],
+    toDOM: (node) => codeBlockDOM(node.attrs.language),
   },
 
   bullet_list: {

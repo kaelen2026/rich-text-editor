@@ -121,6 +121,47 @@ describe("外部 HTML 粘贴", () => {
     });
   });
 
+  it("把外部代码块的语言提到 pre 上，非法值当作没有语言", () => {
+    usingDOM(() => {
+      const slice = parseExternalHTML(
+        schema,
+        '<pre><code class="hljs language-typescript">const a = 1</code></pre>' +
+          '<pre class="lang-Python">print(1)</pre>' +
+          '<pre data-language="rust">fn main() {}</pre>' +
+          '<pre><code class="language-c;background:url(https://tracker.example)">危险</code></pre>' +
+          "<pre>裸代码</pre>",
+      );
+
+      expect(slice.content.toJSON()).toEqual([
+        {
+          type: "code_block",
+          attrs: { language: "typescript" },
+          content: [{ type: "text", text: "const a = 1" }],
+        },
+        {
+          type: "code_block",
+          attrs: { language: "python" },
+          content: [{ type: "text", text: "print(1)" }],
+        },
+        {
+          type: "code_block",
+          attrs: { language: "rust" },
+          content: [{ type: "text", text: "fn main() {}" }],
+        },
+        {
+          type: "code_block",
+          attrs: { language: null },
+          content: [{ type: "text", text: "危险" }],
+        },
+        {
+          type: "code_block",
+          attrs: { language: null },
+          content: [{ type: "text", text: "裸代码" }],
+        },
+      ]);
+    });
+  });
+
   it("将当前不支持的表格和未知块完整降级为段落文本", () => {
     usingDOM(() => {
       const slice = parseExternalHTML(

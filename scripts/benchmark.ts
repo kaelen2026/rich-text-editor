@@ -15,6 +15,7 @@ export const PERFORMANCE_BASELINES = {
   keypressToRedrawP95Ms: 200,
   paste10kTextMs: 1_000,
   toolbarStateUpdateMs: 80,
+  wordCountMs: 80,
   memoryDeltaMb: 80,
 } as const;
 
@@ -161,6 +162,16 @@ export function runBenchmarks(): PerformanceMeasurements {
       editor.execute("selection.selectAll");
       new ToolbarModel(toolbarDefinition, editor.queryCommand).snapshot;
     }),
+    // 字数当前是全量重算 + 按变更缓存，因此测的就是"内容变更后第一次读取"的代价。
+    wordCountMs: (() => {
+      const editor = createBenchmarkEditor();
+      editor.loadDocument(document);
+      return measure(() => {
+        if (editor.getTextStats().characters === 0) {
+          throw new Error("字数统计基准未数到字符");
+        }
+      });
+    })(),
     memoryDeltaMb: memoryDelta(() => {
       const editor = createBenchmarkEditor();
       editor.loadDocument(document);

@@ -252,6 +252,61 @@ export function setBlockAlign(align: BlockAlign | null): Command {
   };
 }
 
+/**
+ * 选区内可指定语言的代码块。判据同样是"Schema 声明了 `language` 属性"而不是
+ * 一张节点名清单：将来任何一个插件贡献的代码类节点声明了它，命令自动生效。
+ */
+function languageBlocks(state: EditorState): Array<{ node: ProseMirrorNode; pos: number }> {
+  const blocks: Array<{ node: ProseMirrorNode; pos: number }> = [];
+  eachSelectedBlock(state, ($block, node) => {
+    if (node.type.spec.attrs?.language && !blocks.some((seen) => seen.pos === $block.pos)) {
+      blocks.push({ node, pos: $block.pos });
+    }
+  });
+  return blocks;
+}
+
+/**
+ * 设置选区内代码块的语言。整段已经是该语言时再执行一次即清除，
+ * 与对齐、标题同一套开关语义。
+ */
+export function setCodeBlockLanguage(language: string | null): Command {
+  return (state, dispatch) => {
+    const blocks = languageBlocks(state);
+    if (blocks.length === 0) {
+      return false;
+    }
+    const target =
+      language !== null && blocks.every((block) => block.node.attrs.language === language)
+        ? null
+        : language;
+    if (blocks.every((block) => block.node.attrs.language === target)) {
+      return false;
+    }
+    if (dispatch) {
+      const transaction = state.tr;
+      for (const block of blocks) {
+        transaction.setNodeMarkup(block.pos, undefined, { ...block.node.attrs, language: target });
+      }
+      dispatch(transaction);
+    }
+    return true;
+  };
+}
+
+/** 选区内的代码块是否**都**是该语言。 */
+export function isCodeLanguageActive(state: EditorState, language: string | null): boolean {
+  const blocks = languageBlocks(state);
+  return (
+    blocks.length > 0 && blocks.every((block) => (block.node.attrs.language ?? null) === language)
+  );
+}
+
+/** 选区内是否存在可指定语言的代码块。 */
+export function hasLanguageBlock(state: EditorState): boolean {
+  return languageBlocks(state).length > 0;
+}
+
 /** 选区内可对齐的文本块是否**都**是该对齐。空选区（例如只选中图片）不算生效。 */
 export function isBlockAligned(state: EditorState, align: BlockAlign | null): boolean {
   const blocks = alignableBlocks(state);

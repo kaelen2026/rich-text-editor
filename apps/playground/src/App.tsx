@@ -13,11 +13,17 @@ import {
 } from "@kaelen/editor-react";
 import { EditorToolbar } from "@kaelen/editor-react-ui";
 import { createEmptyEnvelope, stringifyEnvelope } from "@kaelen/editor-schema";
-import type { DocumentPatch, EditorEnvelope, EditorMode } from "@kaelen/editor-shared-types";
+import {
+  DOCUMENT_JSON_LIMIT_BYTES,
+  type DocumentPatch,
+  type EditorEnvelope,
+  type EditorMode,
+} from "@kaelen/editor-shared-types";
 import type { ToolbarDefinition } from "@kaelen/editor-ui-model";
 import {
   Baseline,
   Bold,
+  Braces,
   ChevronDown,
   ChevronRight,
   Code,
@@ -198,6 +204,30 @@ const TOOLBAR_MENUS: Record<string, readonly MenuEntry[]> = {
       shortcut: "Mod-Shift-J",
     },
   ],
+  // 语言是开放集合，这里只列常见几种；命令本身接受任何合法标识符。
+  "code-language": [
+    { id: "lang-none", label: "无语言", command: "block.setCodeBlockLanguage", input: null },
+    ...(
+      [
+        ["typescript", "TypeScript"],
+        ["javascript", "JavaScript"],
+        ["python", "Python"],
+        ["rust", "Rust"],
+        ["go", "Go"],
+        ["java", "Java"],
+        ["sql", "SQL"],
+        ["bash", "Bash"],
+        ["json", "JSON"],
+        ["html", "HTML"],
+        ["css", "CSS"],
+      ] as const
+    ).map(([language, label]) => ({
+      id: `lang-${language}`,
+      label,
+      command: "block.setCodeBlockLanguage",
+      input: { language },
+    })),
+  ],
   "list-ops": [
     { id: "checked", label: "勾选", command: "list.toggleChecked" },
     { id: "indent", label: "缩进", command: "list.indent", shortcut: "Tab" },
@@ -261,6 +291,13 @@ const toolbarDefinition: ToolbarDefinition = {
           id: "align",
           label: "对齐",
           command: "block.setAlign",
+          menu: true,
+          alwaysEnabled: true,
+        },
+        {
+          id: "code-language",
+          label: "代码语言",
+          command: "block.setCodeBlockLanguage",
           menu: true,
           alwaysEnabled: true,
         },
@@ -360,6 +397,7 @@ const TOOLBAR_ICONS: Record<string, LucideIcon> = {
   "heading-4": Heading4,
   quote: TextQuote,
   "code-block": CodeXml,
+  "code-language": Braces,
   rule: Minus,
   "bullet-list": List,
   "ordered-list": ListOrdered,
@@ -522,13 +560,19 @@ function DegradedBanner() {
 
 /** 状态槽位：每种状态同字号同高度，只换颜色和圆点，切换时不跳动。 */
 function StatusStrip() {
+  const editor = useEditor();
   const dirty = useEditorSelector((snapshot) => snapshot.dirty);
   const revision = useEditorSelector((snapshot) => snapshot.revision);
   const composing = useEditorSelector((snapshot) => snapshot.composing);
+  // 直接问，不用 memo：runtime 已按内容变更缓存，重渲染时取回的是同一个对象。
+  const stats = editor.getTextStats();
   return (
     <span className={dirty ? "status status-dirty" : "status"}>
       <span className="status-dot" />
-      修订号 {revision} · {dirty ? "未保存" : "已保存"}
+      修订号 {revision} · {dirty ? "未保存" : "已保存"} ·{" "}
+      <span title={`不含空白 ${stats.charactersWithoutWhitespace.toLocaleString()} 字`}>
+        {stats.characters.toLocaleString()} 字
+      </span>
       {composing ? <span className="status-composing"> · 输入法组合中，命令已暂停</span> : null}
     </span>
   );
@@ -687,6 +731,10 @@ function Chrome({
   );
 }
 
+function formatBytes(bytes: number): string {
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+}
+
 /** 只消费 patch 事件：面板不调用 getDocument()，避免每次变更都全文序列化。 */
 function PatchPanel({ baseDocument }: { baseDocument: EditorEnvelope }) {
   const editor = useEditor();
@@ -752,12 +800,38 @@ function PatchPanel({ baseDocument }: { baseDocument: EditorEnvelope }) {
 export function App() {
   const [boot, setBoot] = useState<Boot>(() => bootEditor(false, readStoredDocument()));
   const [saved, setSaved] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const { editor, unknownNodes, faulty, baseDocument } = boot;
 
+  // 规模与剪贴板策略的提示汇到同一处：对用户来说它们是同一件事——
+  // "这次写入没做成，原因是什么"。
+  useEffect(() => {
+    setNotice(null);
+    const unsubscribes = [
+      editor.subscribe("limitExceeded", (limit) => setNotice(limit.message)),
+      editor.subscribe("clipboardNotice", (clipboard) => setNotice(clipboard.message)),
+    ];
+    return () => {
+      for (const unsubscribe of unsubscribes) {
+        unsubscribe();
+      }
+    };
+  }, [editor]);
+
   function save() {
+    // 2MB 是存储契约（方案 §14.2）。宿主必须在写之前拒绝，写进去再发现就晚了。
+    const size = editor.getDocumentSize();
+    if (size > DOCUMENT_JSON_LIMIT_BYTES) {
+      setNotice(
+        `文档 ${formatBytes(size)} 超过 ${formatBytes(DOCUMENT_JSON_LIMIT_BYTES)} 上限，未保存。` +
+          "请拆分文档或删除部分内容后重试。",
+      );
+      return;
+    }
     const text = stringifyEnvelope(editor.getDocument());
     window.localStorage.setItem(STORAGE_KEY, text);
     setSaved(text);
+    setNotice(null);
     // markSaved 而不是 loadDocument：装载会重建状态并清空撤销历史。
     editor.markSaved();
   }
@@ -787,11 +861,16 @@ export function App() {
           </summary>
           <p className="notes-body">
             {
-              "标题、引用、列表、待办、代码块、分隔线都在工具栏上，按钮的 tooltip 是对应快捷键；列表里 Tab / Shift+Tab 升降级，Shift+Enter 软换行。选中文字后在“文字颜色”“背景色”里挑一格上色，面板底部的“清除”只去掉这一种颜色，前景色和背景色互不影响。点“图片”选择本地文件，或把图片拖入/粘贴到编辑区：上传中会显示占位，完成后回填；上传期间继续编辑，目标位置会随事务迁移。复制上传中图片不会复制运行时 uploadId。图片插入后可以反复回去改：单击选中，图片上方浮出快捷条（旋转、环绕、替换、删除），双击进入编辑模态——在整幅原图上拖出裁剪框、挑滤镜、调尺寸与替代文本，预览用的就是文档渲染那一套推导，点“应用”才写入，撤销一步即可回到改之前。裁剪与旋转要靠上传服务返回的原始尺寸，拿不到尺寸时这两项会被禁用。输入 #、-、1.、> 或 ``` 加空格可触发结构规则；中文/日文等输入法组合期间工具栏会暂停，并在候选词确认后恢复。复制会把可还原的 Slice 写入 HTML 的 data-co-slice，粘贴时优先恢复它；Cmd/Ctrl+Shift+V 与代码块内粘贴始终只取纯文本。切换状态可以看只读态与禁用态的区别；点保存写入 localStorage，刷新页面内容仍在。勾选“注入故障插件”会装入一批坏掉的第三方插件：重名、缺依赖、循环依赖、覆盖核心命令、命令抛错，用来看熔断，每种坏法都只让它自己失效。"
+              "标题、引用、列表、待办、代码块、分隔线都在工具栏上，按钮的 tooltip 是对应快捷键；列表里 Tab / Shift+Tab 升降级，Shift+Enter 软换行。选中文字后在“文字颜色”“背景色”里挑一格上色，面板底部的“清除”只去掉这一种颜色，前景色和背景色互不影响。点“图片”选择本地文件，或把图片拖入/粘贴到编辑区：上传中会显示占位，完成后回填；上传期间继续编辑，目标位置会随事务迁移。复制上传中图片不会复制运行时 uploadId。图片插入后可以反复回去改：单击选中，图片上方浮出快捷条（旋转、环绕、替换、删除），双击进入编辑模态——在整幅原图上拖出裁剪框、挑滤镜、调尺寸与替代文本，预览用的就是文档渲染那一套推导，点“应用”才写入，撤销一步即可回到改之前。裁剪与旋转要靠上传服务返回的原始尺寸，拿不到尺寸时这两项会被禁用。输入 #、-、1.、> 或 ``` 加空格可触发结构规则；中文/日文等输入法组合期间工具栏会暂停，并在候选词确认后恢复。复制会把可还原的 Slice 写入 HTML 的 data-co-slice，粘贴时优先恢复它；Cmd/Ctrl+Shift+V 与代码块内粘贴始终只取纯文本。切换状态可以看只读态与禁用态的区别；点保存写入 localStorage，刷新页面内容仍在。勾选“注入故障插件”会装入一批坏掉的第三方插件：重名、缺依赖、循环依赖、覆盖核心命令、命令抛错，用来看熔断，每种坏法都只让它自己失效。文档规模上限也在这里能看到：节点数超过 20000 的插入由编辑器在事务入口拒绝，超过 2MB 的文档由本页在写 localStorage 之前拒绝，两种都会在顶部提示，且都只拦新写入——已经超限的历史文档照常打得开。"
             }
           </p>
         </details>
         <DegradedBanner />
+        {notice ? (
+          <p className="banner banner-warn" role="status">
+            {notice}
+          </p>
+        ) : null}
         {unknownNodes.length > 0 ? (
           <p className="banner banner-warn">
             部分内容以只读形式显示，需要这些功能才能编辑：{unknownNodes.join("、")}

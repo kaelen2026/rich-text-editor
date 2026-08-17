@@ -6,6 +6,7 @@ export {
   coreNodes,
   type HeadingLevel,
   isBlockAlign,
+  isCodeLanguage,
   isHeadingLevel,
   MAX_HEADING_LEVEL,
   UNKNOWN_BLOCK,
@@ -25,3 +26,4 @@ export {
   targetVersion,
 } from "./migrate";
 export { type RenderSchema, renderDocumentToHTML } from "./render";
+export { countDocumentText, countText } from "./text-stats";
