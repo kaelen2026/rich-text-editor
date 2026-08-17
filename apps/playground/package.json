@@ -18,6 +18,7 @@
     "@kaelen/editor-plugin-image": "workspace:*",
     "@kaelen/editor-plugin-link": "workspace:*",
     "@kaelen/editor-plugin-table": "workspace:*",
+    "@kaelen/editor-plugin-version-history": "workspace:*",
     "@kaelen/editor-pm-adapter": "workspace:*",
     "@kaelen/editor-react": "workspace:*",
     "@kaelen/editor-react-ui": "workspace:*",

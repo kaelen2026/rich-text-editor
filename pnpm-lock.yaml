@@ -138,6 +138,9 @@ importers:
       '@kaelen/editor-plugin-table':
         specifier: workspace:*
         version: link:../../packages/editor-plugin-table
+      '@kaelen/editor-plugin-version-history':
+        specifier: workspace:*
+        version: link:../../packages/editor-plugin-version-history
       '@kaelen/editor-pm-adapter':
         specifier: workspace:*
         version: link:../../packages/editor-pm-adapter
@@ -383,6 +386,37 @@ importers:
       jsdom:
         specifier: ^26.1.0
         version: 26.1.0
+
+  packages/editor-plugin-version-history:
+    dependencies:
+      '@kaelen/editor-pm-adapter':
+        specifier: workspace:*
+        version: link:../editor-pm-adapter
+      '@kaelen/editor-runtime':
+        specifier: workspace:*
+        version: link:../editor-runtime
+      '@kaelen/editor-shared-types':
+        specifier: workspace:*
+        version: link:../editor-shared-types
+      prosemirror-history:
+        specifier: ^1.4.1
+        version: 1.5.0
+      prosemirror-model:
+        specifier: ^1.25.3
+        version: 1.25.11
+      prosemirror-state:
+        specifier: ^1.4.3
+        version: 1.4.4
+    devDependencies:
+      '@kaelen/editor-api':
+        specifier: workspace:*
+        version: link:../editor-api
+      '@kaelen/editor-collab':
+        specifier: workspace:*
+        version: link:../editor-collab
+      '@kaelen/editor-plugin-comment':
+        specifier: workspace:*
+        version: link:../editor-plugin-comment
 
   packages/editor-pm-adapter:
     dependencies:

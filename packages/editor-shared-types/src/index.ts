@@ -41,6 +41,27 @@ export type PatchOp =
   | { type: "mark"; from: number; to: number; mark: MarkJSON; add: boolean };
 
 /**
+ * 版本历史容器（S30）：一份基线快照加按修订号连续追加的变更流。
+ *
+ * 这是持久化契约：`entries[0].patch.from === baseRevision`，其后每条的 `from`
+ * 等于前一条的 `to`。位置语义随 `DocumentPatch` 一起冻结（方案 §8.4）。
+ * 定期快照与压缩不改这个形状——以新基线另起一份日志即可。
+ */
+export interface VersionLog {
+  v: 1;
+  /** 基线文档与它的修订号。日志只能回答基线之后的版本。 */
+  baseRevision: number;
+  baseDoc: NodeJSON;
+  entries: VersionLogEntry[];
+}
+
+export interface VersionLogEntry {
+  patch: DocumentPatch;
+  /** 宿主的版本元数据（时间、作者、标签）。编辑器不生成也不解释它。 */
+  meta?: unknown;
+}
+
+/**
  * 评论/批注锚点。存在文档外部而非文档内部（方案 §9.8）。
  * S1 只定型字段，锚点映射由后续切片实现。
  */

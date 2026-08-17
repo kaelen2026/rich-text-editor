@@ -44,3 +44,12 @@ export {
   type SessionExtension,
 } from "./session";
 export { restoreDoc, type SanitizeResult, sanitizeDoc } from "./unknown";
+export {
+  appendVersionLogEntry,
+  createVersionLog,
+  documentAtRevision,
+  inverseOpsBetween,
+  type VersionAtResult,
+  type VersionLogAppendResult,
+  versionLogTip,
+} from "./version-log";

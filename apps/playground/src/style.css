@@ -785,6 +785,48 @@ details[open] > summary .disclosure {
   background: color-mix(in srgb, currentcolor 10%, transparent);
 }
 
+/* ---- 版本历史面板 ---- */
+
+.version-table {
+  inline-size: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.version-table th,
+.version-table td {
+  padding: var(--s1) var(--s2);
+  border-block-end: 1px solid var(--hairline);
+  text-align: start;
+}
+
+.version-table tr[data-current] td {
+  font-weight: 600;
+}
+
+.version-diff {
+  margin-block-start: var(--s3);
+  padding: var(--s3);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-x: auto;
+}
+
+.version-diff [data-diff="add"] {
+  color: oklch(45% 0.12 150);
+  background: oklch(45% 0.12 150 / 0.08);
+}
+
+.version-diff [data-diff="del"] {
+  color: var(--danger);
+  background: var(--danger-wash);
+  text-decoration: line-through;
+}
+
 .workbench:focus-within {
   border-color: var(--hairline-strong);
 }
