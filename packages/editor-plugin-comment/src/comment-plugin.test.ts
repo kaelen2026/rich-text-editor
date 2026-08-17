@@ -227,6 +227,19 @@ describe("单机评论：锚点随事务映射（§9.5 同一套机制）", () =
     expect(editor.getAnnotations()[0]?.orphaned).toBe(true);
   });
 
+  it("选区两端贴在块边界上时收进紧邻文字：不吞没被选中的块", () => {
+    const { editor, bridge } = boot(documentOf("甲乙丙", "丁戊己"));
+    // 文档：p1 = 1..4（甲乙丙），p2 = 6..9（丁戊己）。
+    // 终点贴 p2 开头（p2 一个字没选）→ 收回 p1 末尾。
+    select(bridge(), 2, 6);
+    editor.execute("comment.add", { id: "c1", payload: null });
+    expect(textAt(bridge(), editor.getAnnotations()[0] as Annotation)).toBe("乙丙");
+    // 起点贴 p1 末尾（p1 一个字没选）→ 前进到 p2 开头。
+    select(bridge(), 4, 8);
+    editor.execute("comment.add", { id: "c2", payload: null });
+    expect(textAt(bridge(), editor.getAnnotations()[1] as Annotation)).toBe("丁戊");
+  });
+
   it("属性：随机编辑序列后锚点仍指向同一段文字", () => {
     // 线性同余伪随机数：种子固定，失败可复现。
     let seed = 20260817;

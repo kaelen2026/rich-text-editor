@@ -25,6 +25,8 @@ type CommentMeta =
 
 export const commentKey = new PluginKey<CommentState>("comment");
 
+const EMPTY: readonly Annotation[] = Object.freeze([]);
+
 /**
  * 可选评论能力，消费 §9.8 冻结的锚点模型：评论**不做 mark**，是文档外部的
  * 锚点表，存在信封的 `annotations` 里。mark 会随文本分裂合并产生 ID 去重问题，
@@ -106,8 +108,9 @@ class CommentController implements SessionExtension {
     // 观察者跑在 Yjs 事务的调用栈上，派发 PM 事务要挪到微任务里，
     // 别在别人的栈上重入（与协同准入判断同一条纪律）。
     this.unobserve = store.observe(() => this.scheduleRefresh());
-    // 后加入的协作者要立刻看到已有的评论，不能等下一次共享表变化。
-    this.dispatchMeta({ kind: "refresh" });
+    // 后加入的协作者的首次投影同样走微任务：这里正站在 updateState 的
+    // 插件视图阶段，当场派发事务是在 ProseMirror 自己的栈上重入。
+    this.scheduleRefresh();
   }
 
   private detachStore(): void {
@@ -137,7 +140,8 @@ class CommentController implements SessionExtension {
   /** 当前批注表。信封序列化与宿主的 getAnnotations() 都从这里取。 */
   annotations(): readonly Annotation[] {
     const state = this.bridge?.getState();
-    return state ? (commentKey.getState(state)?.annotations ?? []) : [];
+    // 空表用同一个常量：runtime 按数组引用缓存只读包装，销毁后也要引用稳定。
+    return state ? (commentKey.getState(state)?.annotations ?? EMPTY) : EMPTY;
   }
 
   readonly addCommand: SessionCommand = {
@@ -146,9 +150,13 @@ class CommentController implements SessionExtension {
       if (!bridge) {
         return { ok: false, reason: "disabled", detail: "编辑器尚未就绪" };
       }
-      const { from, to, empty } = bridge.getState().selection;
-      if (empty) {
+      const state = bridge.getState();
+      if (state.selection.empty) {
         return { ok: false, reason: "invalid", detail: "请先选中要评论的文字" };
+      }
+      const { from, to } = anchorRange(state);
+      if (to <= from) {
+        return { ok: false, reason: "invalid", detail: "选中的内容没有可锚定的文字" };
       }
       const { id, payload } = addInputFrom(input);
       const annotationId = id ?? `comment-${crypto.randomUUID()}`;
@@ -261,6 +269,33 @@ class CommentController implements SessionExtension {
     }
     return mapped;
   }
+}
+
+/**
+ * 批注锚定的区间：把选区两端收进**紧邻字符的文本位置**——`to` 后退到"前面
+ * 有字符"的位置，`from` 前进到"后面有字符"的位置。评论锚的是文字（§9.8），
+ * 两端贴在块边界上时不收的话，协同锚点的 `to` 端（锚"区间内最后一个字符"）
+ * 会落到块元素本身上，把整个没被选中的块圈进批注；文末位置的锚点还会退化成
+ * type 锚定，翻转偏向后解析回文首。收完两端撞在一起说明选区里没有文字
+ * （例如只选中了一个原子节点），那不是可锚定的批注目标。
+ */
+function anchorRange(state: EditorState): { from: number; to: number } {
+  let { from, to } = state.selection;
+  while (to > from) {
+    const $to = state.doc.resolve(to);
+    if ($to.parent.isTextblock && $to.parentOffset > 0) {
+      break;
+    }
+    to -= 1;
+  }
+  while (from < to) {
+    const $from = state.doc.resolve(from);
+    if ($from.parent.isTextblock && $from.parentOffset < $from.parent.content.size) {
+      break;
+    }
+    from += 1;
+  }
+  return { from, to };
 }
 
 /** 扁平锚点随事务映射；位置都没动时保住引用，宿主的订阅靠它少渲染。 */

@@ -288,6 +288,59 @@ describe("协同评论：批注存共享文档的批注表，锚点是 Y.Relativ
     });
   });
 
+  it("跨段落的评论也能锚定：远端前插后两端仍指向原来的文字", async () => {
+    const room = createRoom();
+    const left = join(room, "左");
+    const right = join(room, "右");
+    await bound(left, right);
+
+    // 两段：位置 1 起是"甲乙丙"，第二段"丁戊己"从位置 6 起。
+    insertText(left, 1, "甲乙丙");
+    const bridge = left.bridge();
+    const paragraph = bridge.getState().schema.nodes.paragraph;
+    if (!paragraph) {
+      throw new Error("schema 里没有 paragraph");
+    }
+    bridge.dispatch(bridge.getState().tr.insert(5, paragraph.create()));
+    insertText(left, 6, "丁戊己");
+    await vi.waitFor(() => expect(text(right)).toBe("甲乙丙\n丁戊己"));
+
+    // 从第一段中间选到第二段中间："乙丙 + 段界 + 丁戊"。
+    select(left, 2, 8);
+    expect(left.editor.execute("comment.add", { id: "c1", payload: null }).ok).toBe(true);
+    expect(annotationText(left, left.editor.getAnnotations()[0] as Annotation)).toBe("乙丙\n丁戊");
+
+    insertText(right, 1, "对方前插的");
+    await vi.waitFor(() => {
+      for (const peer of [left, right]) {
+        const annotation = peer.editor.getAnnotations()[0] as Annotation;
+        expect(annotation.orphaned).toBe(false);
+        expect(annotationText(peer, annotation)).toBe("乙丙\n丁戊");
+      }
+    });
+  });
+
+  it("选区终点贴在下一段开头时收回上一段末尾，批注不吞下一段", async () => {
+    const room = createRoom();
+    const left = join(room, "左");
+    await bound(left);
+
+    insertText(left, 1, "甲乙丙");
+    const bridge = left.bridge();
+    const paragraph = bridge.getState().schema.nodes.paragraph;
+    if (!paragraph) {
+      throw new Error("schema 里没有 paragraph");
+    }
+    bridge.dispatch(bridge.getState().tr.insert(5, paragraph.create()));
+    insertText(left, 6, "丁戊己");
+
+    // 选 2..6："乙丙" + 段界，第二段一个字都没选——锚点不该把"丁戊己"圈进来。
+    select(left, 2, 6);
+    expect(left.editor.execute("comment.add", { id: "c1", payload: null }).ok).toBe(true);
+    const annotation = left.editor.getAnnotations()[0] as Annotation;
+    expect(annotationText(left, annotation)).toBe("乙丙");
+  });
+
   it("协同绑定后 getDocument() 的 annotations 是共享批注表的投影", async () => {
     const room = createRoom();
     const left = join(room, "左");
