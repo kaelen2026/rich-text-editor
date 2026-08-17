@@ -138,6 +138,7 @@ ProseMirror
 | `editor-api` | 面向业务的窄接口，**刻意不暴露任何 ProseMirror 类型** |
 | `editor-plugin-{link,table,image,color}` | 可选能力，贡献 `co_` 前缀的节点与标记 |
 | `editor-plugin-ai` | 改写 / 续写 / 摘要。只定义宿主注入的 `AiService` 契约，不认识任何厂商、不发网络请求；不贡献任何节点或标记 |
+| `editor-plugin-comment` | 评论。锚点表存信封的 `annotations`（不做 mark），高亮是 Decoration；协同下批注存共享 `Y.Doc` 的批注表，锚点为 `Y.RelativePosition`；同样不贡献任何节点或标记 |
 | `editor-remote-image-service` | 远端图片转存策略与 SSRF 控制，可替换的服务契约 |
 | `editor-collab` | 协同传输：可替换的 `CollabProvider` 契约、一个 WebSocket 实现、服务端房间逻辑。认识 Yjs，不认识 ProseMirror |
 | `editor-ui-model` | 工具栏行为状态机与浮动工具栏定位，无框架 |
