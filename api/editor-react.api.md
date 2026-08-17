@@ -1,11 +1,11 @@
 # editor-react
 
 ```ts
-EditorContent: ({ className, ariaLabel }: EditorContentProps) => import("/Users/kaelen/workspace/github/kaelen2026/rich-text-editor/.claude/worktrees/remaining-debts/node_modules/.pnpm/@types+react@19.2.18/node_modules/@types/react/index").JSX.Element
+EditorContent: ({ className, ariaLabel }: EditorContentProps) => import("@types/react/index").JSX.Element
 ```
 
 ```ts
-EditorProvider: ({ editor, children }: EditorProviderProps) => import("/Users/kaelen/workspace/github/kaelen2026/rich-text-editor/.claude/worktrees/remaining-debts/node_modules/.pnpm/@types+react@19.2.18/node_modules/@types/react/index").JSX.Element
+EditorProvider: ({ editor, children }: EditorProviderProps) => import("@types/react/index").JSX.Element
 ```
 
 ```ts

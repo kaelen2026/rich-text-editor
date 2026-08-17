@@ -1,7 +1,7 @@
 # editor-react-ui
 
 ```ts
-EditorToolbar: ({ definition, className, renderMenu, renderLabel, nativeTooltip, onExecute, }: EditorToolbarProps) => import("/Users/kaelen/workspace/github/kaelen2026/rich-text-editor/.claude/worktrees/remaining-debts/node_modules/.pnpm/@types+react@19.2.18/node_modules/@types/react/index").JSX.Element
+EditorToolbar: ({ definition, className, renderMenu, renderLabel, nativeTooltip, onExecute, }: EditorToolbarProps) => import("@types/react/index").JSX.Element
 ```
 
 ```ts

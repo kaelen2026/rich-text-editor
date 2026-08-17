@@ -13,6 +13,11 @@
  * 只盯业务接入面。`editor-pm-adapter`、`editor-runtime` 和能力插件是桥接层，
  * §7.1 明确允许 ProseMirror 类型在那里流动，给它们做快照只会制造噪音。
  *
+ * 已知的丑陋处：Vue 两个包的组件会打印出一长串 `DefineComponent<…>`。那是
+ * `defineComponent` 推导出来的真实类型，不是这里的 bug；真正要看的 props 就在
+ * 那串东西的第一个类型参数里。不去裁剪它——按形状裁剪等于给快照加一层会自己
+ * 失效的启发式，而快照的全部价值在于它照实反映。
+ *
  * 用法：`node scripts/api-surface.mjs`（校验）/ `--update`（重录）。
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -130,12 +135,34 @@ function describe(symbol, declaration) {
     return ["```ts", stripExportModifier(declaration.getText()), "```", ""];
   }
   const type = checker.getTypeOfSymbolAtLocation(symbol, declaration);
-  const printed = checker.typeToString(
-    type,
-    declaration,
-    ts.TypeFormatFlags.NoTruncation | ts.TypeFormatFlags.UseFullyQualifiedType,
+  const printed = checker.typeToString(type, declaration, ts.TypeFormatFlags.NoTruncation);
+  return ["```ts", `${name}: ${normalizeModulePaths(printed)}`, "```", ""];
+}
+
+/**
+ * 抹掉类型串里的绝对路径。
+ *
+ * `typeToString` 对无法在当前作用域内命名的类型会打印
+ * `import("/绝对路径/node_modules/.pnpm/vue@3.5.41_typescript@5.9.3/node_modules/vue/dist/vue")`。
+ * 那串东西里有**仓库的绝对路径和依赖的具体版本号**，于是快照在本机和 CI 上必然不同、
+ * 每次升级依赖也变——快照就成了永远对不上的东西。
+ *
+ * 这条是 CI 教的：第一版快照在本机全绿，推上去就炸，diff 里全是
+ * `/Users/...` 对 `/home/runner/...`。
+ */
+function normalizeModulePaths(text) {
+  return (
+    text
+      // pnpm 的虚拟目录：`.../node_modules/.pnpm/<包@版本>/node_modules/vue/dist/vue` → `vue/dist/vue`
+      .replace(
+        /import\("[^"]*\/node_modules\/\.pnpm\/[^/]+\/node_modules\/([^"]+)"\)/g,
+        'import("$1")',
+      )
+      // 普通提升安装：`.../node_modules/react/index` → `react/index`
+      .replace(/import\("[^"]*\/node_modules\/([^"]+)"\)/g, 'import("$1")')
+      // 工作区内部文件：留下仓库相对路径
+      .replaceAll(`${process.cwd()}/`, "")
   );
-  return ["```ts", `${name}: ${printed}`, "```", ""];
 }
 
 /** 快照里不带 `export`：它对每一条都一样，只会让 diff 更吵。 */
