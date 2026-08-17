@@ -36,7 +36,9 @@ pnpm test
 | 命令 | 作用 |
 | --- | --- |
 | `pnpm dev` | 启动 playground（`apps/playground`） |
-| `pnpm check` / `pnpm check:fix` | Biome 检查 / 自动修复，附带 `toDOM` 的 DOM 依赖静态检查 |
+| `pnpm check` / `pnpm check:fix` | 发布门禁：序列化函数禁 DOM、包间依赖方向、公开 API 表面快照，再加 Biome 检查 / 自动修复 |
+| `pnpm api` / `pnpm api:update` | 校验 / 重录 `api/*.api.md` 公开 API 快照。ProseMirror 类型泄漏到业务接口即失败 |
+| `pnpm lint:deps` | 包间依赖方向：越层、幽灵依赖、核心包引入框架，任一即失败 |
 | `pnpm typecheck` | 全仓库 `tsc --noEmit` |
 | `pnpm test` / `pnpm test:watch` | Vitest |
 | `pnpm e2e` | Playwright 真实浏览器验收：输入法组合态（CDP）与粘贴解析阶段的网络请求数。首次运行前跑一次 `pnpm exec playwright install chromium` |
@@ -158,6 +160,8 @@ ProseMirror
 | [`docs/performance-budgets.md`](docs/performance-budgets.md) | 性能基准口径与 CI 门禁阈值 |
 | [`docs/y-prosemirror-compatibility.md`](docs/y-prosemirror-compatibility.md) | M4 协同的前置兼容性验证结论与接入边界 |
 | [`AGENTS.md`](AGENTS.md) | 分支与 PR 流程、工具链、TDD 约定 |
+
+`api/` 是公开 API 表面快照，由 `pnpm api:update` 重录。改动接入方看得见的接口时它会在 diff 里出现——这是唯一能让破坏性变更被人过目的机制。`tests/sample-plugin.ts` 是一致性样例插件：它只允许 import `@kaelen/editor-runtime` 一个包，用来证明"新增能力插件不需要改 Core"这句话仍然成立。
 
 `fixtures/clipboard/` 是剪贴板 golden 语料库：真实来源的原始剪贴板 dump 加黄金输出。粘贴逻辑每次改动都要跑全量 golden diff——这是唯一能防住"修了 Word 又坏了 Notion"的机制。
 

@@ -38,6 +38,12 @@ importers:
       '@kaelen/editor-runtime':
         specifier: workspace:*
         version: link:packages/editor-runtime
+      '@kaelen/editor-schema':
+        specifier: workspace:*
+        version: link:packages/editor-schema
+      '@kaelen/editor-shared-types':
+        specifier: workspace:*
+        version: link:packages/editor-shared-types
       '@kaelen/editor-ui-model':
         specifier: workspace:*
         version: link:packages/editor-ui-model
@@ -205,6 +211,9 @@ importers:
       '@kaelen/editor-runtime':
         specifier: workspace:*
         version: link:../editor-runtime
+      '@kaelen/editor-shared-types':
+        specifier: workspace:*
+        version: link:../editor-shared-types
     devDependencies:
       '@kaelen/editor-api':
         specifier: workspace:*
@@ -212,9 +221,6 @@ importers:
       '@kaelen/editor-schema':
         specifier: workspace:*
         version: link:../editor-schema
-      '@kaelen/editor-shared-types':
-        specifier: workspace:*
-        version: link:../editor-shared-types
 
   packages/editor-plugin-image:
     dependencies:

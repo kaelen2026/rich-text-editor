@@ -33,6 +33,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # check 里含：序列化函数禁 DOM、包间依赖方向、公开 API 表面快照、Biome。
       - name: Check formatting and lint rules
         run: pnpm check
 

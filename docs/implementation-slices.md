@@ -18,7 +18,7 @@
 
 | 状态 | 切片 |
 | --- | --- |
-| 已合并 | S1–S25，含补记的 S19.5（文字颜色与背景色，实际早于 S19 合入）。S12 的演示服务与可替换服务契约位于 `apps/remote-image-service` 和 `packages/editor-remote-image-service`。S13 的 y-prosemirror 前置验证已记录在 `docs/y-prosemirror-compatibility.md`。 |
+| 已合并 | S1–S26，含补记的 S19.5（文字颜色与背景色，实际早于 S19 合入）。S12 的演示服务与可替换服务契约位于 `apps/remote-image-service` 和 `packages/editor-remote-image-service`。S13 的 y-prosemirror 前置验证已记录在 `docs/y-prosemirror-compatibility.md`。 |
 | 待决策 | 无。 |
 
 S17 的已交付范围是基准文档、六项 Node/jsdom 测量、`getDocument()` 快照缓存和 CI 门禁。字数统计随 S23 补上了自己的测量（`wordCountMs`）；NodeView 懒挂载尚无对应的 NodeView，后续在引入该能力时单独实现和测量。
@@ -27,7 +27,6 @@ S17 的已交付范围是基准文档、六项 Node/jsdom 测量、`getDocument(
 
 | 欠账 | 方案条目 |
 | --- | --- |
-| 公开 API 表面快照纳入 CI、样例插件一致性测试、包间依赖方向 lint | §16.5 |
 | 性能预算按真实 CI 历史与业务样本校准 | §14 |
 | M4：协同、评论、版本历史、AI | §17 |
 
@@ -340,6 +339,21 @@ graph TD
 | `compositionend` 里**同步**冲刷挂起队列，会被 ProseMirror 随后的 DOM 读回整段覆盖，回填静默丢失。改为等下一笔事务（上屏文本本身就是那一笔）再冲刷，并留 250ms 兜底；且冲刷放进微任务，不在读回的调用栈里插队 | jsdom 没有"从 DOM 读回模型"这一步，同步冲刷在那里看上去一直是对的 |
 | 外部 HTML 的容器元素（`div` / `section` / `article` …）把内部块结构**压平成一个段落**。改为容器透明：块结构原样上并，只有连续的行内内容才收成段落，容器上的对齐传给它收出来的段落 | golden 语料里的样本恰好都是裸的 `<h2><p>`，没有外层容器；而真实网页复制出来的 HTML 几乎总是裹着容器 |
 
+### S26. 工程验收：API 表面、样例插件、依赖方向 · AFK
+
+- **动什么**：三件 §16.5 里写了但没有执行点的事，全部进 `pnpm check`。
+  - `scripts/api-surface.mjs` + `api/*.api.md`：九个业务接入面包的公开导出快照，`pnpm api:update` 重录。**直接暴露 ProseMirror 类型即失败**——判据是"这个符号的声明来自哪个包"，不是名字长什么样，项目自己也有叫 `Plugin`、`Schema` 的类型。
+  - `tests/sample-plugin.ts` + 一致性测试：一个只允许 import `@kaelen/editor-runtime` 的插件，覆盖节点、标记、命令、三种序列化表达、缺插件兜底和命名空间违规六条。
+  - `scripts/lint-dependencies.mjs`：越层依赖、幽灵依赖（import 了但没声明）、核心包引入框架，任一即失败。
+- **为什么只给九个包做 API 快照**：`editor-pm-adapter`、`editor-runtime` 和能力插件是桥接层，§7.1 明确允许 ProseMirror 类型在那里流动。给它们做快照只会制造噪音，而噪音是快照机制最常见的死法——一旦有人开始习惯性 `--update`，它就等于不存在了。
+- **为什么样例插件放 `tests/` 而不是新开一个包**：它不是一个能力，是一份**可执行的承诺**。放进 `packages/` 会让人以为它是产品的一部分，而它的价值恰恰在于"哪天它编译不过了，说明 Core 的公开面退化了"。
+- **检查自身也被检查**：`tests/api-surface-guard.test.ts` 拿一个真的泄漏了 ProseMirror 类型的 fixture 喂给检查脚本，确认它真的会失败。一份只会打印"通过"的检查和没有检查是一回事，而这种失效完全无声。
+- **顺带修掉**：`editor-plugin-color` 在源码里 import `@kaelen/editor-shared-types`，却只把它写进 `devDependencies`——靠 pnpm 提升一直能跑，单独发布就断。这正是幽灵依赖检查的第一个战果。
+- **同时补上**：`tests/` 与 `e2e/` 纳入 `tsconfig` 的 `include`。在此之前这两个目录里的 TypeScript **完全没有被 typecheck 过**。
+- **回滚**：单 commit；回滚后失去三道门禁，功能不受影响。
+- **依赖**：S4（插件契约）、S24（样例插件要演示 Markdown 表达）。
+- **PRD**：§7.1、§16.5
+
 ## 4. 不可回滚边界
 
 以下内容一旦有**真实用户文档落库**就不可回滚，必须在接入任何真实业务数据之前做完做对：
@@ -367,7 +381,7 @@ graph TD
 | --- | --- |
 | M1 内核与不可逆决策 | S1 – S8、S14 |
 | M2 内容能力与第二框架 | S9 – S13、S15、S18 – S20、S22 – S24 |
-| M3 平台化 | S5（可提前）、S16、S17、S21、S25 |
+| M3 平台化 | S5（可提前）、S16、S17、S21、S25、S26 |
 | M4 高级能力 | 本清单不覆盖；以 S14 的 patch 流与 S1 的 `annotations` 字段为入口 |
 
 ---
