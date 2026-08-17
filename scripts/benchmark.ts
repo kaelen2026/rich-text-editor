@@ -1,3 +1,4 @@
+import { writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { createEditor } from "@kaelen/editor-api";
 import { createColorPlugin } from "@kaelen/editor-plugin-color";
@@ -307,6 +308,34 @@ const toolbarDefinition: ToolbarDefinition = {
   ],
 };
 
+/**
+ * 一次基准运行的完整记录。
+ *
+ * 阈值校准（方案 §14）要的是"同一环境下连续多次的真实分布"，而不是某一次的
+ * 数字，因此环境信息必须和测量值一起记下来：本机跑出来的结果和 CI runner 上
+ * 跑出来的不可比，混在一起算出的阈值只会同时冤枉一边。
+ */
+export interface BenchmarkRun {
+  recordedAt: string;
+  node: string;
+  platform: string;
+  /** CI runner 的标识；本地运行为 `local`。校准脚本按它分组。 */
+  environment: string;
+  measurements: PerformanceMeasurements;
+  budgets: PerformanceMeasurements;
+}
+
+export function toBenchmarkRun(measurements: PerformanceMeasurements, now: Date): BenchmarkRun {
+  return {
+    recordedAt: now.toISOString(),
+    node: process.version,
+    platform: `${process.platform}-${process.arch}`,
+    environment: process.env.RUNNER_NAME ?? (process.env.CI ? "ci" : "local"),
+    measurements,
+    budgets: PERFORMANCE_BUDGETS,
+  };
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const measurements = runBenchmarks();
   const failures = compareMeasurements(measurements);
@@ -317,6 +346,17 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       budget: PERFORMANCE_BUDGETS[metric as PerformanceMetric],
     })),
   );
+  // `--json <path>` 把这一次的结果连同环境一起写出来。CI 按运行归档，攒够样本
+  // 之后交给 scripts/calibrate-budgets.mjs 反推阈值。
+  const jsonFlag = process.argv.indexOf("--json");
+  if (jsonFlag !== -1) {
+    const target = process.argv[jsonFlag + 1];
+    if (!target) {
+      throw new Error("用法：pnpm bench --json <output.json>");
+    }
+    writeFileSync(target, `${JSON.stringify(toBenchmarkRun(measurements, new Date()), null, 2)}\n`);
+    console.log(`已写出基准记录：${target}`);
+  }
   if (failures.length > 0) {
     console.error("性能预算超限（预算已含 20% CI 回归余量）：");
     for (const failure of failures) {

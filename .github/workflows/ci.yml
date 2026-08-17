@@ -58,7 +58,17 @@ jobs:
         run: pnpm e2e
 
       - name: Enforce performance budget
-        run: pnpm bench
+        run: pnpm bench --json bench-run.json
+
+      # 归档每次运行的测量值与环境。当前阈值是拍出来的初始值，不是采集来的；
+      # 攒够三次同环境记录后交给 scripts/calibrate-budgets.mjs 反推真实基线（§14）。
+      - name: Archive benchmark record
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-${{ github.run_number }}-${{ github.run_attempt }}
+          path: bench-run.json
+          retention-days: 90
 
       - name: Validate commit messages
         run: pnpm exec commitlint --from "${{ github.event.pull_request.base.sha }}" --to "${{ github.event.pull_request.head.sha }}"

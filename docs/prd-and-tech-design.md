@@ -804,6 +804,8 @@ clipboardData.setData('application/x-company-editor+json', JSON.stringify(payloa
 
 没有数字的性能要求不可证伪，等于风险未被缓解。当前门禁使用的是初始阈值，不是已采集的 CI 历史基线；拿到真实业务样本和连续 CI 数据后必须校准。
 
+校准的机制已经就位（S27）：每次 CI 把 `bench-run.json` 归档为 artifact，`scripts/calibrate-budgets.mjs` 从同环境的三次以上记录反推基线。**但校准本身还没做**——它需要真实的连续运行记录，编不出来。在那之前要认清这道门禁现在的实际效力：本地实测多数指标只有当前上限的 1/30 到 1/90，也就是说十倍的性能回归它也不会响。它拦的是彻底跑崩，不是变慢。口径与流程见 `docs/performance-budgets.md`。
+
 ### 14.1 基准与预算
 
 基准文档：5 万字 / 300 段 / 50 图 / 20 表 / 最深 4 层列表。

@@ -10,7 +10,7 @@
 
 复制粘贴覆盖编辑器内部（保开合深度的 Slice）、外部网页 HTML、Word、Excel 与纯文本，全部经 Schema 白名单与 inert 解析。远端图片一律服务端转存，带完整 SSRF 控制。文档可导出 HTML 与 Markdown，也可从 Markdown 导入。
 
-底层原语已经就位但尚未做成功能：`DocumentPatch` 增量变更流、位置映射契约、信封 `annotations` 评论锚点字段。协同、评论、版本历史、AI 属于 M4，本仓库暂不覆盖。
+底层原语已经就位但尚未做成功能：`DocumentPatch` 增量变更流、位置映射契约、信封 `annotations` 评论锚点字段。协同、评论、版本历史、AI 属于 M4，尚未实现——四片的切片规格（含验收、回滚与已知坑）见 [`docs/implementation-slices.md`](docs/implementation-slices.md) 的 §3.1。
 
 当前进度与逐片交付状态见 [`docs/implementation-slices.md`](docs/implementation-slices.md)。
 
